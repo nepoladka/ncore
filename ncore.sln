@@ -5,6 +5,41 @@ VisualStudioVersion = 17.4.33213.308
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "web", "web\web.vcxproj", "{955882F7-8682-4DA3-B22F-FF1572E67FCF}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{71FDD443-777A-4119-9E44-277E69E492EF}"
+	ProjectSection(SolutionItems) = preProject
+		src\base_64.hpp = src\base_64.hpp
+		src\config.hpp = src\config.hpp
+		src\defines.hpp = src\defines.hpp
+		src\dimension_vector.hpp = src\dimension_vector.hpp
+		src\disassembled.hpp = src\disassembled.hpp
+		src\dynamic_array.hpp = src\dynamic_array.hpp
+		src\files.hpp = src\files.hpp
+		src\handle.hpp = src\handle.hpp
+		src\kernel_map.hpp = src\kernel_map.hpp
+		src\limit.hpp = src\limit.hpp
+		src\managed_memory.hpp = src\managed_memory.hpp
+		src\process.hpp = src\process.hpp
+		src\result.hpp = src\result.hpp
+		src\shared_memory.hpp = src\shared_memory.hpp
+		src\signature.hpp = src\signature.hpp
+		src\silent_library.hpp = src\silent_library.hpp
+		src\static_array.hpp = src\static_array.hpp
+		src\string_utils.hpp = src\string_utils.hpp
+		src\thread.hpp = src\thread.hpp
+		src\time.hpp = src\time.hpp
+		src\utils.hpp = src\utils.hpp
+		src\vector.hpp = src\vector.hpp
+		src\vmprotect.hpp = src\vmprotect.hpp
+		src\web.hpp = src\web.hpp
+		src\zip.hpp = src\zip.hpp
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "git", "git", "{66B7D14A-025A-45E7-904C-D50DF7B41664}"
+	ProjectSection(SolutionItems) = preProject
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
