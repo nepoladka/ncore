@@ -67,5 +67,9 @@ namespace ncore {
 		__forceinline bool operator!=(const static_array& second) const noexcept {
 			return !this->operator==(second);
 		}
+
+		__forceinline _t& operator*() noexcept {
+			return _values[0];
+		}
 	};
 }

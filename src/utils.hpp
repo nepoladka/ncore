@@ -21,7 +21,7 @@
 
 #define is_lowercase_input(VK_SHIFT_PRESSED) ((bool)(!((((GetKeyState(VK_CAPITAL) & 0x0001) != 0) && !((bool)(VK_SHIFT_PRESSED))) ? (true) : ((!((GetKeyState(VK_CAPITAL) & 0x0001) != 0) && ((bool)(VK_SHIFT_PRESSED))) ? true : false))))
 
-#define messagef(TYPE, TITLE, ...) MessageBoxA(NULL, ncore::string::format(__VA_ARGS__).c_str(), (TITLE), (TYPE))
+#define messagef(TYPE, TITLE, ...) MessageBoxA(NULL, ncore::string_utils::format(__VA_ARGS__).c_str(), (TITLE), (TYPE))
 
 namespace ncore::utils {
     using namespace std;
@@ -489,6 +489,44 @@ namespace ncore::utils {
         }
 
         return buffer;
+    }
+
+    static __forceinline bool get_window_rectangles(HWND window, POINT* _pos, SIZE* _size, RECT* _borders) {
+        if (!window) return false;
+
+        auto window_rect = RECT{ 0 };
+        if (!GetWindowRect(window, &window_rect)) _Fail: return false;
+
+        auto client_rect = RECT{ 0 };
+        if (!GetClientRect(window, &client_rect)) goto _Fail;
+
+        auto result = true;
+
+        if (_size) {
+            _size->cx = client_rect.right;
+            _size->cy = client_rect.bottom;
+            result &= _size->cx > 0 && _size->cy > 0;
+        }
+
+        MapWindowPoints(window, null, (LPPOINT)&client_rect, 2);
+
+        auto WindowBorders = RECT {
+            client_rect.left - window_rect.left,
+            client_rect.top - window_rect.top,
+            window_rect.right - client_rect.right,
+            window_rect.bottom - client_rect.bottom
+        };
+
+        if (_borders) {
+            *_borders = WindowBorders;
+        }
+
+        if (_pos) {
+            _pos->x = window_rect.left + WindowBorders.left;
+            _pos->y = window_rect.top + WindowBorders.top;
+        }
+
+        return result;
     }
 
     static __forceinline unsigned __int64 system_boot_time() {

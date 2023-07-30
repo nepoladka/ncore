@@ -81,43 +81,29 @@ namespace ncore::web {
 		constexpr status_t HTTP_NETWORK_AUTHENTICATION_REQUIRED = 511;
 		constexpr status_t MISC_CODE_OFFSET = 600;
 
-		constexpr bool is_informational(const status_t code) noexcept {
+		static __forceinline constexpr bool const is_informational(const status_t code) noexcept {
 			return (code >= INFO_CODE_OFFSET && code < SUCCESS_CODE_OFFSET);
 		}
 
-		constexpr bool is_success(const status_t code) noexcept {
+		static __forceinline constexpr bool const is_success(const status_t code) noexcept {
 			return (code >= SUCCESS_CODE_OFFSET && code < REDIRECT_CODE_OFFSET);
 		}
 
-		constexpr bool is_redirect(const status_t code) noexcept {
+		static __forceinline constexpr bool const is_redirect(const status_t code) noexcept {
 			return (code >= REDIRECT_CODE_OFFSET && code < CLIENT_ERROR_CODE_OFFSET);
 		}
 
-		constexpr bool is_client_error(const status_t code) noexcept {
+		static __forceinline constexpr bool const is_client_error(const status_t code) noexcept {
 			return (code >= CLIENT_ERROR_CODE_OFFSET && code < SERVER_ERROR_CODE_OFFSET);
 		}
 
-		constexpr bool is_server_error(const status_t code) noexcept {
+		static __forceinline constexpr bool const is_server_error(const status_t code) noexcept {
 			return (code >= SERVER_ERROR_CODE_OFFSET && code < MISC_CODE_OFFSET);
 		}
 	}
 
 	namespace request {
-		struct parameter_t {
-			__forceinline parameter_t(const std::string& p_key, const std::string& p_value) : key{ p_key }, value{ p_value } { return; }
-			__forceinline parameter_t(std::string&& p_key, std::string&& p_value) : key{ std::move(p_key) }, value{ std::move(p_value) } { return; }
-
-			std::string key, value;
-		};
-
-		using query_t = std::initializer_list<parameter_t>;
-
-		struct response_t {
-			status::status_t code;
-			std::string data;
-		};
-
-		enum method : __int8 {
+		enum method_t : __int8 {
 			m_get,
 			m_post,
 			m_put,
@@ -129,9 +115,42 @@ namespace ncore::web {
 			m_count
 		};
 
-		using method_t = method;
+		struct parameter_t {
+			__forceinline parameter_t(const std::string& p_key, const std::string& p_value) : key{ p_key }, value{ p_value } { return; }
+			__forceinline parameter_t(std::string&& p_key, std::string&& p_value) : key{ std::move(p_key) }, value{ std::move(p_value) } { return; }
 
-		response_t send(const method_t method, const std::string& url, const query_t& parameters);
+			std::string key, value;
+		};
+
+		struct response_t {
+			status::status_t code;
+			std::string data;
+
+			__forceinline constexpr bool const is_informational() const noexcept {
+				return status::is_informational(code);
+			}
+
+			__forceinline constexpr bool const is_success() const noexcept {
+				return status::is_success(code);
+			}
+
+			__forceinline constexpr bool const is_redirect() const noexcept {
+				return status::is_redirect(code);
+			}
+
+			__forceinline constexpr bool const is_client_error() const noexcept {
+				return status::is_client_error(code);
+			}
+
+			__forceinline constexpr bool const is_server_error() const noexcept {
+				return status::is_server_error(code);
+			}
+		};
+
+		using url_t = std::string;
+		using query_t = std::initializer_list<parameter_t>;
+
+		response_t send(const method_t method, const url_t& url, const query_t& parameters = { });
 	}
 
 	namespace socket {

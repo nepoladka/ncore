@@ -146,12 +146,12 @@ namespace ncore {
             auto code_base = (byte_t*)module->code_base;
 
             auto directory = get_header_dictionary(module, IMAGE_DIRECTORY_ENTRY_IMPORT);
-            if (!directory->Size == 0) _Fail: return true;
+            if (directory->Size == 0) _Exit: return true;
 
             auto import_descriptor = (PIMAGE_IMPORT_DESCRIPTOR)(code_base + directory->VirtualAddress);
             for (; !IsBadReadPtr(import_descriptor, sizeof(IMAGE_IMPORT_DESCRIPTOR)) && import_descriptor->Name; import_descriptor++) {
                 auto library_handle = LoadLibraryA((char*)code_base + import_descriptor->Name);
-                if (!library_handle) goto _Fail;
+                if (!library_handle) _Fail: return false;
 
                 auto temp = (hmodule_t*)realloc(module->modules, (module->modules_count + 1) * (sizeof(hmodule_t)));
                 if (!temp) {
@@ -190,7 +190,7 @@ namespace ncore {
                 if (!status) goto _FreeLibraryAndExit;
             }
 
-            return true;
+            goto _Exit;
         }
 
         static __forceinline size_t get_real_section_size(silent_library* module, IMAGE_SECTION_HEADER* section) {
@@ -380,7 +380,7 @@ namespace ncore {
 
             if (result->headers->OptionalHeader.AddressOfEntryPoint != 0) {
                 if (result->dynamic_link) {
-                    auto entry = (dll_entry_t)(code + result->headers->OptionalHeader.AddressOfEntryPoint);
+                    auto entry = (dll_entry_t)(address_t)(code + result->headers->OptionalHeader.AddressOfEntryPoint);
 
                     auto successfull = (*entry)((HINSTANCE)code, DLL_PROCESS_ATTACH, 0);
                     if (!successfull) goto _ReleaseLibraryAndExit;
@@ -428,7 +428,7 @@ namespace ncore {
 
         __forceinline address_t search_export(const char* name) {
             auto module = this;
-            auto code_base = (byte_t)module->code_base;
+            auto code_base = (byte_t*)module->code_base;
 
             auto directory = get_header_dictionary(module, IMAGE_DIRECTORY_ENTRY_EXPORT);
             if (!directory->Size) _Fail: return nullptr;
