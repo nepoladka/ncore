@@ -1,11 +1,12 @@
+#pragma once
 #include "limit.hpp"
 #include "vector.hpp"
-#include "includes/ntos.h"
+#include "readable_byte.hpp"
 #include <string>
 #include <windows.h>
 #include <ntstatus.h>
+#include "includes/ntos.h"
 
-#include "defines.hpp"
 
 #define UI64_ROUND_UP(VAL, STEP)	(((DWORD64(VAL)) + STEP - 1) & (~(STEP - 1)))
 #define UI64_ROUND_DOWN(VAL, STEP)	((DWORD64(VAL)) & (~(STEP - 1)))
@@ -14,9 +15,51 @@
 #define PAGE_ROUND_DOWN(x)			UI64_ROUND_DOWN(x, PAGE_SIZE)
 
 namespace ncore {
-	static constexpr const unsigned char const __hexCharList[] = { "0123456789abcdef" };
 	static constexpr const char const __asciiLowerUpperOffset = 'a' - 'A';
 
+
+	enum class known_state_t : byte_t {
+		unknown,	// ??
+		known,		// 11
+		halfknown	// 1?
+	};
+
+	static __forceinline constexpr known_state_t __fastcall get_known_state(readable_byte_t readable_byte) noexcept {
+		if (readable_byte.dec == '??') return known_state_t::unknown;
+
+		if (readable_byte.str[0] == '?' || readable_byte.str[1] == '?') return known_state_t::halfknown;
+
+		return known_state_t::known;
+	}
+
+	class byte_pattern_t {
+	public:
+		known_state_t known_state;
+		readable_byte_t readable;
+		byte_t min, max;
+
+		__forceinline constexpr byte_pattern_t(readable_byte_t readable, byte_t min, byte_t max) noexcept {
+			this->known_state = get_known_state(readable);
+			this->readable = readable;
+			this->min = min;
+			this->max = max;
+		}
+
+		__forceinline constexpr byte_pattern_t(readable_byte_t readable) noexcept {
+			this->known_state = get_known_state(readable);
+			this->readable = readable;
+			this->min = this->max = readable.byte();
+		}
+
+		__forceinline constexpr bool __fastcall operator==(byte_t byte) const noexcept {
+			switch (known_state) {
+			case known_state_t::unknown: default: break;
+			case known_state_t::known: return byte > min && byte < max;
+			case known_state_t::halfknown: return readable == byte;
+			}
+			return true;
+		}
+	};
 
 	class signature : public vector<short> {
 	public:

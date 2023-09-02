@@ -8,13 +8,13 @@
 #include <string>
 
 namespace ncore {
-	using status_t = NTSTATUS;
+	using nt_status_t = NTSTATUS;
 
 	static constexpr const char const __drv64dllName[] = { "drv64.dll" };
 
 	class kernel_map {
 	private:
-		using map_driver_t = status_t(*)(const address_t, id_t);
+		using map_driver_t = nt_status_t(*)(const address_t, id_t);
 		using map_file_image_t = const address_t(*)(const address_t);
 		using unmap_file_image_t = void (*)(const address_t);
 
@@ -29,7 +29,7 @@ namespace ncore {
 		__forceinline ~kernel_map() {
 			if (!initialized()) return;
 
-			_library->release();
+			_library->unload();
 			_library = nullptr;
 		}
 
@@ -51,7 +51,7 @@ namespace ncore {
 			return DeleteFileA(__drv64dllName);
 		}
 
-		__forceinline status_t map_driver(const address_t image, id_t provider_id) const noexcept {
+		__forceinline nt_status_t map_driver(const address_t image, id_t provider_id) const noexcept {
 			auto procedure = get_export<map_driver_t>("MapDriver");
 			if (!procedure) return STATUS_PROCEDURE_NOT_FOUND;
 
@@ -73,7 +73,7 @@ namespace ncore {
 		}
 
 	public:
-		static __forceinline status_t map_from_memory(const address_t file, id_t vulnerability_provider = 0) {
+		static __forceinline nt_status_t map_from_memory(const address_t file, id_t vulnerability_provider = 0) {
 			const auto internal = kernel_map();
 			if (!internal.initialized()) return STATUS_DLL_INIT_FAILED;
 
@@ -87,7 +87,7 @@ namespace ncore {
 			return status;
 		}
 
-		static __forceinline status_t map_from_file(const std::string& path, id_t vulnerability_provider = 0) {
+		static __forceinline nt_status_t map_from_file(const std::string& path, id_t vulnerability_provider = 0) {
 			byte_t* data = nullptr;
 			if (!files::read_file(path, &data)) return STATUS_FILE_NOT_AVAILABLE;
 

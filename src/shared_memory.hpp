@@ -5,8 +5,6 @@
 #include "defines.hpp"
 
 namespace ncore {
-	using namespace std;
-
 	class shared_memory {
 	private:
 		struct {
@@ -19,15 +17,23 @@ namespace ncore {
 			string name = string();
 
 			__forceinline bool allocate(const string& name, size_t size) {
-				if (!(handle = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, NULL, size, (this->name = name).c_str()))) return false;
+				if (!(handle = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, NULL, DWORD(size), (this->name = name).c_str()))) return false;
 
-				return address = (byte_t*)MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, NULL, NULL, size);
+				if (address = (byte_t*)MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, NULL, NULL, size)) return true;
+
+				CloseHandle(handle);
+
+				return false;
 			}
 
 			__forceinline bool attach(const string& name, size_t size) {
 				if (!(handle = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, (this->name = name).c_str()))) return false;
 
-				return address = (byte_t*)MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, NULL, NULL, size);
+				if (address = (byte_t*)MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, NULL, NULL, size)) return true;
+
+				CloseHandle(handle);
+
+				return false;
 			}
 
 			__forceinline void detach() {

@@ -1,10 +1,9 @@
 #pragma once
 #include "defines.hpp"
-#include "static_array.hpp"
 #include "handle.hpp"
-#include <windows.h>
+#include "static_array.hpp"
+#include "environment.hpp"
 #include <string>
-#include "includes/ntos.h"
 
 namespace ncore {
     using namespace std;
@@ -67,19 +66,19 @@ namespace ncore {
             _handle = handle_t(win32_handle, __threadHandleCloser, false);
         }
 
-        static __forceinline thread current() noexcept {
-            return thread(GetCurrentThreadId());
+        static __forceinline thread current(unsigned open_access = THREAD_ALL_ACCESS) noexcept {
+            return open_access ? thread(__thread_id, open_access) : thread(__current_thread);
         }
 
-        static __forceinline thread get_by_id(id_t id) noexcept {
-            return thread(id);
+        static __forceinline thread get_by_id(id_t id, unsigned open_access = null) noexcept {
+            return thread(id, open_access);
         }
 
         static __forceinline thread create(address_t start, void* parameter = nullptr, handle::native_t process = nullptr, bool keep_handle = false, int priority = null, unsigned flags = null, size_t stack_size = null) noexcept {
             if (!start) _Fail: return thread();
             
             if (!process) {
-                process = CURRENT_PROCESS_HANDLE;
+                process = __current_process;
             }
 
             auto handle = create_ex(process, start, parameter, flags, stack_size);

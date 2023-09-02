@@ -5,7 +5,7 @@
 #undef compress
 
 namespace ncore::zip {
-	__declspec(align(1)) class compressed {
+	begin_unaligned class compressed {
 	public:
 		size_t raw_length;
 		size_t length;
@@ -23,7 +23,7 @@ namespace ncore::zip {
 			return (compressed*)malloc(total_size(size));
 		}
 
-		static __forceinline void free(compressed** instance) {
+		static __forceinline void release(compressed** instance) {
 			if (!instance) return;
 
 			if (!*instance) return;
@@ -31,17 +31,37 @@ namespace ncore::zip {
 			auto address = *instance;
 			*instance = nullptr;
 
-			return address->free();
+			return address->release();
 		}
 
-		__forceinline void free() {
-			return ::free(this);
+		__forceinline void release() {
+			return free(this);
+		}
+
+
+		__forceinline bool decompress(void** _result, size_t* _length) {
+			if (!(_result && _length)) _Fail: return false;
+
+			auto raw_length = mz_ulong(this->raw_length);
+			auto length = mz_ulong(this->length);
+			if (!(length && raw_length)) goto _Fail;
+
+			auto result = (byte_t*)malloc(raw_length);
+			if (mz_uncompress(result, &raw_length, data(), length) != MZ_OK) {
+				free(result);
+				goto _Fail;
+			}
+
+			*_result = result;
+			*_length = raw_length;
+
+			return true;
 		}
 
 	private:
 		__forceinline compressed() { return; }
 		__forceinline ~compressed() { return; }
-	};
+	} end_unaligned;
 
 	static __forceinline compressed* compress(const void* data, size_t size) {
 		if (!(data && size)) _Fail: return nullptr;
@@ -50,7 +70,7 @@ namespace ncore::zip {
 		auto result = compressed::alloc(size);
 
 		if (mz_compress2(result->data(), &length, (const byte_t*)data, length, MZ_UBER_COMPRESSION) != MZ_OK) {
-			result->free();
+			result->release();
 			goto _Fail;
 		}
 
@@ -61,21 +81,6 @@ namespace ncore::zip {
 	}
 
 	static __forceinline bool decompress(compressed* data, void** _result, size_t* _length) {
-		if (!(data && _result && _length)) _Fail: return false;
-
-		auto raw_length = mz_ulong(data->raw_length);
-		auto length = mz_ulong(data->length);
-		if (!(length && raw_length)) goto _Fail;
-
-		auto result = (byte_t*)malloc(raw_length);
-		if (mz_uncompress(result, &raw_length, data->data(), length) != MZ_OK) {
-			free(result);
-			goto _Fail;
-		}
-
-		*_result = result;
-		*_length = raw_length;
-
-		return true;
+		return data ? data->decompress(_result, _length) : false;
 	}
 }

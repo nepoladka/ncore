@@ -1,25 +1,24 @@
 #pragma once
 #include "utils.hpp"
 #include "defines.hpp"
-#include <windows.h>
+#include "environment.hpp"
 #include <winnt.h>
 #include <stdio.h>
-#include "includes/ntos.h"
 
 #pragma warning(disable: 4055)
 #pragma warning(error: 4244)
 #pragma warning(error: 4267)
 
 #define get_header_dictionary(MODULE, INDEX)  &(MODULE)->headers->OptionalHeader.DataDirectory[INDEX]
-#define pointer_offset(DATA, OFFSET) (void*)(((uintptr_t)(DATA)) + (OFFSET))
+#define pointer_offset(DATA, OFFSET) address_t(((uintptr_t)(DATA)) + (OFFSET))
 
 namespace ncore {
     static constexpr const unsigned const __protectionFlags[2][2][2] = { { {PAGE_NOACCESS, PAGE_WRITECOPY}, {PAGE_READONLY, PAGE_READWRITE}, }, { {PAGE_EXECUTE, PAGE_EXECUTE_WRITECOPY}, {PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE}, }, };
 
     class silent_library {
     private:
-        using dll_entry_t = int(*)(HINSTANCE, DWORD32, LPVOID);
-        using exe_entry_t = int (*)(void);
+        using dll_entry_t = i32_t(*)(address_t, ui32_t, address_t);
+        using exe_entry_t = i32_t(*)(void);
         using hmodule_t = HMODULE;
         using image_headers = IMAGE_NT_HEADERS64;
 
@@ -40,7 +39,7 @@ namespace ncore {
             char* name;
         };
 
-        hmodule_t code_base;
+        byte_t* code_base;
         size_t modules_count;
         hmodule_t* modules;
 
@@ -109,12 +108,12 @@ namespace ncore {
 
         static __forceinline bool perform_base_relocation(silent_library* module, ptrdiff_t delta)
         {
-            auto code_base = (byte_t*)module->code_base;
+            auto code_base = module->code_base;
 
             auto directory = get_header_dictionary(module, IMAGE_DIRECTORY_ENTRY_BASERELOC);
             if (!directory->Size) return delta == 0;
 
-            auto relocation = (PIMAGE_BASE_RELOCATION)(code_base + directory->VirtualAddress);
+            auto relocation = PIMAGE_BASE_RELOCATION(code_base + directory->VirtualAddress);
             for (; relocation->VirtualAddress > 0; ) {
                 auto dest = code_base + relocation->VirtualAddress;
                 auto relInfo = (unsigned short*)pointer_offset(relocation, sizeof(IMAGE_BASE_RELOCATION));
@@ -143,7 +142,7 @@ namespace ncore {
 
         static __forceinline bool build_import_table(silent_library* module)
         {
-            auto code_base = (byte_t*)module->code_base;
+            auto code_base = module->code_base;
 
             auto directory = get_header_dictionary(module, IMAGE_DIRECTORY_ENTRY_IMPORT);
             if (directory->Size == 0) _Exit: return true;
@@ -180,8 +179,8 @@ namespace ncore {
                         *func_reference = GetProcAddress(library_handle, (LPCSTR)IMAGE_ORDINAL(*thunk_reference));
                     }
                     else {
-                        PIMAGE_IMPORT_BY_NAME thunkData = (PIMAGE_IMPORT_BY_NAME)(code_base + (*thunk_reference));
-                        *func_reference = GetProcAddress(library_handle, (LPCSTR)&thunkData->Name);
+                        auto thunk_data = PIMAGE_IMPORT_BY_NAME(code_base + (*thunk_reference));
+                        *func_reference = GetProcAddress(library_handle, (LPCSTR)&thunk_data->Name);
                     }
 
                     if (!(status = *func_reference)) break;
@@ -228,7 +227,7 @@ namespace ncore {
                 protect |= PAGE_NOCACHE;
             }
 
-            if (!VirtualProtect(section_data->address, section_data->size, protect, (PDWORD)&old_protect))  return false;
+            if (!VirtualProtect(section_data->address, section_data->size, protect, (PDWORD)&old_protect)) return false;
 
             goto _Exit;
         }
@@ -277,23 +276,23 @@ namespace ncore {
 
         static __forceinline void execute_tls(silent_library* module)
         {
-            auto code_base = (byte_t*)module->code_base;
+            auto code_base = module->code_base;
 
             auto directory = get_header_dictionary(module, IMAGE_DIRECTORY_ENTRY_TLS);
             if (!directory->VirtualAddress) return;
 
-            auto tls = (PIMAGE_TLS_DIRECTORY)(code_base + directory->VirtualAddress);
+            auto tls = PIMAGE_TLS_DIRECTORY(code_base + directory->VirtualAddress);
             auto callback = (PIMAGE_TLS_CALLBACK*)tls->AddressOfCallBacks;
             if (!callback) return;
 
             while (*callback) {
-                (*callback)((hmodule_t)code_base, DLL_PROCESS_ATTACH, NULL);
+                (*callback)(code_base, DLL_PROCESS_ATTACH, nullptr);
                 callback++;
             }
         }
 
     public:
-        static __forceinline silent_library* load(const byte_t* data, size_t size) {
+        static __forceinline silent_library* load(const byte_t* data, size_t size, void* reserved = nullptr, ui32_t reason = DLL_PROCESS_ATTACH) {
             if (size < sizeof(IMAGE_DOS_HEADER)) _Fail: return nullptr;
 
             auto dos_header = (PIMAGE_DOS_HEADER)data;
@@ -320,10 +319,8 @@ namespace ncore {
             auto aligned_image_size = align_up(old_header->OptionalHeader.SizeOfImage, system_info.dwPageSize);
             if (aligned_image_size != align_up(last_section_end, system_info.dwPageSize)) goto _Fail;
 
-            auto code = (byte_t*)VirtualAlloc((void*)old_header->OptionalHeader.ImageBase, aligned_image_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-            if (!code) {
-                if (!(code = (byte_t*)VirtualAlloc(nullptr, aligned_image_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE))) goto _Fail;
-            }
+            auto code = (byte_t*)VirtualAlloc(nullptr, aligned_image_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+            if (!code) goto _Fail;
 
             pointer_list* blocked_memory = nullptr;
             auto node = blocked_memory;
@@ -343,20 +340,20 @@ namespace ncore {
                 if (!(code = (byte_t*)VirtualAlloc(nullptr, aligned_image_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE))) goto _FreePointerListAndExit;
             }
 
-            auto result = (silent_library*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(silent_library));
-            if (!result) {
-                VirtualFree(code, 0, MEM_RELEASE);
-                goto _FreePointerListAndExit;
-            }
+            auto result = (silent_library*)(malloc(sizeof(silent_library)));
+            memset(result, null, sizeof(silent_library));
 
-            result->code_base = (HINSTANCE)code;
+            result->code_base = code;
             result->dynamic_link = (old_header->FileHeader.Characteristics & IMAGE_FILE_DLL) != 0;
             result->page_size = system_info.dwPageSize;
             result->blocked_memory = blocked_memory;
 
             if (size < old_header->OptionalHeader.SizeOfHeaders) {
-            _ReleaseLibraryAndExit:
-                result->release();
+            _UnloadLibraryAndExit:
+                result->unload();
+
+                free(result);
+
                 goto _Fail;
             }
 
@@ -367,28 +364,32 @@ namespace ncore {
 
             result->headers->OptionalHeader.ImageBase = (uintptr_t)code;
 
-            if (!copy_sections(result, data, size, old_header)) goto _ReleaseLibraryAndExit;
+            if (!copy_sections(result, data, size, old_header)) goto _UnloadLibraryAndExit;
 
-            auto location_delta = (ptrdiff_t)(result->headers->OptionalHeader.ImageBase - old_header->OptionalHeader.ImageBase);
+            auto location_delta = ptrdiff_t(result->headers->OptionalHeader.ImageBase - old_header->OptionalHeader.ImageBase);
             result->relocated = (location_delta) ? perform_base_relocation(result, location_delta) : true;
 
-            if (!build_import_table(result)) goto _ReleaseLibraryAndExit;
+            if (!build_import_table(result)) goto _UnloadLibraryAndExit;
 
-            if (!finalize_sections(result)) goto _ReleaseLibraryAndExit;
+            if (!finalize_sections(result)) goto _UnloadLibraryAndExit;
 
             execute_tls(result);
 
-            if (result->headers->OptionalHeader.AddressOfEntryPoint != 0) {
-                if (result->dynamic_link) {
-                    auto entry = (dll_entry_t)(address_t)(code + result->headers->OptionalHeader.AddressOfEntryPoint);
+            if (result->headers->OptionalHeader.AddressOfEntryPoint) {
+                __try {
+                    if (result->dynamic_link) {
+                        auto entry = result->dll_entry = dll_entry_t(code + result->headers->OptionalHeader.AddressOfEntryPoint);
 
-                    auto successfull = (*entry)((HINSTANCE)code, DLL_PROCESS_ATTACH, 0);
-                    if (!successfull) goto _ReleaseLibraryAndExit;
+                        if (!entry(code, reason, reserved)) goto _UnloadLibraryAndExit;
 
-                    result->initialized = true;
+                        result->initialized = true;
+                    }
+                    else {
+                        result->exe_entry = exe_entry_t(code + result->headers->OptionalHeader.AddressOfEntryPoint);
+                    }
                 }
-                else {
-                    result->exe_entry = (exe_entry_t)(code + result->headers->OptionalHeader.AddressOfEntryPoint);
+                __except (true) {
+                    goto _UnloadLibraryAndExit;
                 }
             }
             else {
@@ -398,42 +399,42 @@ namespace ncore {
             return result;
         }
 
-        __forceinline void release() {
-            auto module = this;
+        __forceinline void unload() noexcept {
+            if (initialized) {
+                __tryif(dynamic_link) {
+                    auto entry = dll_entry_t(code_base + headers->OptionalHeader.AddressOfEntryPoint);
+                    entry(code_base, DLL_PROCESS_DETACH, nullptr);
+                } __nocatch;
 
-            if (module->initialized) {
-                auto entry = (dll_entry_t)(module->code_base + module->headers->OptionalHeader.AddressOfEntryPoint);
-                (*entry)(module->code_base, DLL_PROCESS_DETACH, 0);
+                initialized = false;
             }
 
-            free(module->exports_table);
-            if (module->modules) {
-                for (int i = 0; i < module->modules_count; i++) {
-                    if (module->modules[i]) {
-                        FreeLibrary(module->modules[i]);
+            if (exports_table) {
+                free(exports_table);
+            }
+
+            if (modules) {
+                for (size_t i = 0; i < modules_count; i++) {
+                    if (modules[i]) {
+                        FreeLibrary(modules[i]);
                     }
                 }
 
-                free(module->modules);
+                free(modules);
             }
 
-            if (module->code_base) {
-                VirtualFree(module->code_base, 0, MEM_RELEASE);
+            if (code_base) {
+                VirtualFree(code_base, 0, MEM_RELEASE);
             }
 
-            release_pointer_list(module->blocked_memory);
-
-            HeapFree(GetProcessHeap(), 0, module);
+            return release_pointer_list(blocked_memory);
         }
 
         __forceinline address_t search_export(const char* name) {
-            auto module = this;
-            auto code_base = (byte_t*)module->code_base;
-
-            auto directory = get_header_dictionary(module, IMAGE_DIRECTORY_ENTRY_EXPORT);
+            auto directory = get_header_dictionary(this, IMAGE_DIRECTORY_ENTRY_EXPORT);
             if (!directory->Size) _Fail: return nullptr;
 
-            auto exports = (PIMAGE_EXPORT_DIRECTORY)(code_base + directory->VirtualAddress);
+            auto exports = PIMAGE_EXPORT_DIRECTORY(code_base + directory->VirtualAddress);
             if (exports->NumberOfNames == 0 || exports->NumberOfFunctions == 0) goto _Fail;
 
             auto index = 0ui32;
@@ -446,22 +447,22 @@ namespace ncore {
                 goto _Fail;
             }
             else {
-                if (!module->exports_table) {
+                if (!exports_table) {
                     auto nameRef = (unsigned*)(code_base + exports->AddressOfNames);
                     auto ordinal = (unsigned short*)(code_base + exports->AddressOfNameOrdinals);
 
                     auto entry = (export_name_entry*)malloc(exports->NumberOfNames * sizeof(export_name_entry));
-                    if (!(module->exports_table = entry)) goto _Fail;
+                    if (!(exports_table = entry)) goto _Fail;
 
                     for (int i = 0; i < exports->NumberOfNames; i++, nameRef++, ordinal++, entry++) {
                         entry->name = (char*)(code_base + (*nameRef));
                         entry->index = *ordinal;
                     }
 
-                    qsort(module->exports_table, exports->NumberOfNames, sizeof(export_name_entry), (_CoreCrtNonSecureSearchSortCompareFunction)compare);
+                    qsort(exports_table, exports->NumberOfNames, sizeof(export_name_entry), (_CoreCrtNonSecureSearchSortCompareFunction)compare);
                 }
 
-                auto found = (const export_name_entry*)bsearch(&name, module->exports_table, exports->NumberOfNames, sizeof(export_name_entry), (_CoreCrtNonSecureSearchSortCompareFunction)find);
+                auto found = (const export_name_entry*)bsearch(&name, exports_table, exports->NumberOfNames, sizeof(export_name_entry), (_CoreCrtNonSecureSearchSortCompareFunction)find);
                 if (!found) goto _Fail;
                 index = found->index;
             }

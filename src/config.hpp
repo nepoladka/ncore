@@ -1,4 +1,5 @@
 #pragma once
+#include "base_64.hpp"
 #include <map>
 #include <vector>
 #include <string>
@@ -21,16 +22,16 @@ static constexpr const char __configSeparator[] = { ": " };
 #endif
 
 namespace ncore {
-    using namespace std;
+    using string_t = std::string;
 
-    template<typename _key_t = string, typename _value_t = string> class config {
+    template<typename _key_t = string_t, typename _value_t = string_t> class config {
     private:
-        map<_key_t, _value_t> _map;
-        string _path;
+        std::map<_key_t, _value_t> _map;
+        string_t _path;
         bool _save;
 
     public:
-        __forceinline config(const string& path, bool load = true, bool autoSave = false) {
+        __forceinline config(const string_t& path, bool load = true, bool autoSave = false) {
             _path = path;
             _save = autoSave;
 
@@ -57,18 +58,18 @@ namespace ncore {
             _path.clear();
         }
 
-        __forceinline const string& path() {
+        __forceinline const string_t& path() {
             return _path;
         }
 
         __forceinline void load() {
             _map.clear();
 
-            ifstream infile(_path, ios::binary);
+            std::ifstream infile(_path, std::ios::binary);
 
             if (infile.is_open()) {
                 while (!infile.eof()) {
-                    pair<_key_t, _value_t> pair;
+                    std::pair<_key_t, _value_t> pair;
                     infile.read(reinterpret_cast<char*>(&pair), sizeof(pair));
                     _map.insert(pair);
                 }
@@ -77,14 +78,11 @@ namespace ncore {
         }
 
         __forceinline void save(bool clear = false) {
-            ofstream outfile(_path, ios::binary);
+            std::ofstream outfile(_path, std::ios::binary);
 
             if (outfile.is_open()) {
                 auto data = this->data();
                 outfile.write(reinterpret_cast<const char*>(data.data()), data.size());
-                /*for (auto const& pair : _map) {
-                    outfile.write(reinterpret_cast<const char*>(&pair), sizeof(pair));
-                }*/
                 outfile.close();
             }
 
@@ -123,63 +121,81 @@ namespace ncore {
     class readable_config
     {
     private:
-        unordered_map<string, string> _map;
-        vector<string> _orders;
-        string _path;
+        std::unordered_map<string_t, string_t> _map;
+        std::vector<string_t> _orders;
+        string_t _path;
         bool _save;
         bool _loaded;
 
+
+        __forceinline string_t get_data(bool sortAlphabetically = false) {
+            std::ostringstream buffer;
+
+            if (sortAlphabetically) {
+                for (auto it : _map) {
+                    buffer << it.first << CONFIG_SEPARATOR << it.second << std::endl;
+                }
+            }
+            else {
+                for (auto key : _orders) {
+                    buffer << key << CONFIG_SEPARATOR << _map[key] << std::endl;
+                }
+            }
+
+            return buffer.str();
+        }
+
     public:
-        __forceinline readable_config(const string& path, bool autoSave = false) : _path(path) {
+        __forceinline readable_config(const string_t& path, bool autoSave = false) noexcept : _path(path) {
             _save = autoSave;
             _loaded = load(_path);
         }
 
-        __forceinline readable_config(const ifstream& file) : _path() {
-            _loaded = load(*((istream*)&file));
+        __forceinline readable_config(const std::ifstream& file) noexcept : _path() {
+            _loaded = load(*((std::istream*)&file));
         }
 
-        __forceinline readable_config(const istringstream& data) : _path() {
+        __forceinline readable_config(const std::istringstream& data) noexcept : _path() {
             _save = false;
 
-            _loaded = load(*((istream*)&data));
+            _loaded = load(*((std::istream*)&data));
         }
 
-        __forceinline readable_config() : _path() {
+        __forceinline readable_config() noexcept : _path()  {
             _save = _loaded = false;
         }
 
-        __forceinline ~readable_config() {
+        __forceinline ~readable_config() noexcept {
             if (_save)
                 save();
         }
 
-        __forceinline string path() {
+        __forceinline string_t path() const noexcept {
             return _path;
         }
 
-        __forceinline bool loaded() {
+        __forceinline bool loaded() const noexcept {
             return _loaded;
         }
 
-        __forceinline bool load(istream& data) {
-            string line;
+        __forceinline bool load(std::istream& data) noexcept {
+            string_t line;
 
             for (int i = 0; std::getline(data, line); i++)
             {
-                string key, value;
-                string lowerLine = line;
+                string_t key, value;
+                string_t lowerLine = line;
                 transform(lowerLine.begin(), lowerLine.end(), lowerLine.begin(), ::tolower);
-                istringstream iss(line);
+                std::istringstream iss(line);
 
                 int keyStart = lowerLine.find_first_of(CONFIG_VALID_KEY_CHARS);
                 int keyEnd = lowerLine.find_first_not_of(CONFIG_VALID_KEY_CHARS, keyStart);
-                if (keyStart == string::npos || keyEnd == string::npos) continue;
+                if (keyStart == std::string::npos || keyEnd == std::string::npos) continue;
                 key = lowerLine.substr(keyStart, keyEnd);
 
                 int valueStart = lowerLine.find_first_not_of(CONFIG_WHITESPACES, keyEnd + sizeof(CONFIG_SEPARATOR) - 1);
-                if (valueStart == string::npos || valueStart == line.length() + 1) continue;
-                value = line.substr(valueStart, string::npos);
+                if (valueStart == std::string::npos || valueStart == line.length() + 1) continue;
+                value = line.substr(valueStart, std::string::npos);
 
                 set(key, value);
             }
@@ -187,9 +203,9 @@ namespace ncore {
             return true;
         }
 
-        __forceinline bool load(const string& path) {
-            ifstream file;
-            file.open(path, ifstream::in, ifstream::_Openprot);
+        __forceinline bool load(const string_t& path) noexcept {
+            std::ifstream file;
+            file.open(path, std::ifstream::in, std::ifstream::_Openprot);
             bool ret = load(file);
 
             if (file.is_open()) 
@@ -198,43 +214,38 @@ namespace ncore {
             return ret;
         }
 
-        __forceinline bool load() {
+        __forceinline bool load() noexcept {
             return load(_path);
         }
 
-        __forceinline std::string data(bool sortAlphabetically = false) {
-            ostringstream buffer;
-
-            if (sortAlphabetically) {
-                for (auto it : _map) {
-                    buffer << it.first << CONFIG_SEPARATOR << it.second << endl;
-                }
-            }
-            else {
-                for (auto key : _orders) {
-                    buffer << key << CONFIG_SEPARATOR << _map[key] << endl;
-                }
-            }
-
-            return buffer.str();
+        __forceinline bool empty() const noexcept {
+            return _map.empty();
         }
 
-        __forceinline bool save(bool sortAlphabetically = false) {
+        __forceinline string_t data(bool sortAlphabetically = false) noexcept {
+            return ((readable_config*)this)->get_data(sortAlphabetically);
+        }
+
+        __forceinline string_t data(bool sortAlphabetically = false) const noexcept {
+            return ((readable_config*)this)->get_data(sortAlphabetically);
+        }
+
+        __forceinline bool save(bool sortAlphabetically = false) noexcept {
             if (_path.empty()) return false;
             return save(_path, sortAlphabetically);
         }
 
-        __forceinline bool save(ofstream& file, bool sortAlphabetically = false) {
+        __forceinline bool save(std::ofstream& file, bool sortAlphabetically = false) noexcept {
             if (!file.is_open()) return false;
 
-            file << data(sortAlphabetically) << endl;
+            file << data(sortAlphabetically) << std::endl;
 
             return true;
         }
 
-        __forceinline bool save(const string& path, bool sortAlphabetically = false) {
-            ofstream file;
-            file.open(path, ifstream::trunc);
+        __forceinline bool save(const string_t& path, bool sortAlphabetically = false) noexcept {
+            std::ofstream file;
+            file.open(path, std::ifstream::trunc);
             auto ret = save(file, sortAlphabetically);
 
             if (file.is_open()) 
@@ -243,14 +254,14 @@ namespace ncore {
             return ret;
         }
 
-        __forceinline string get(const string& key) {
+        __forceinline string_t get(const string_t& key) const noexcept {
             for (auto& part : _map) {
                 if (part.first == key) return part.second;
             }
-            return string();
+            return string_t();
         }
 
-        __forceinline bool fget(const string& key, const char* const format, ...) {
+        __forceinline bool fget(const string_t& key, const char* const format, ...) const noexcept {
             auto value = get(key);
             if (value.empty()) return false;
 
@@ -262,8 +273,13 @@ namespace ncore {
             return result;
         }
 
-        __forceinline bool set(const string& key, const string& value) {
-            auto it = _map.insert(pair<string, string>(key, value));
+        __forceinline readable_config iget(const string_t& key) const noexcept {
+            auto encoded = get(key);
+            return encoded.empty() ? readable_config() : readable_config(std::istringstream(base64::decode(encoded)));
+        }
+
+        __forceinline bool set(const string_t& key, const string_t& value) noexcept {
+            auto it = _map.insert(std::pair<string_t, string_t>(key, value));
             if (it.second) {
                 _orders.push_back(key);
             }
@@ -273,15 +289,25 @@ namespace ncore {
             return it.second;
         }
 
-        __forceinline bool fset(const string& key, const char* const format, ...) {
-            char buffer[512] = { 0 };
+        template<size_t _bufferSize = 512> __forceinline bool fset(const string_t& key, const char* const format, ...) noexcept {
+            const auto buffer_size = _bufferSize ? _bufferSize : 512;
+            auto buffer = new char[buffer_size];
 
-            va_list argList;
-            __crt_va_start(argList, format);
-            vsnprintf(buffer, sizeof(buffer), format, argList);
-            __crt_va_end(argList);
+            va_list arguments_list;
+            __crt_va_start(arguments_list, format);
+            vsnprintf(buffer, buffer_size, format, arguments_list);
+            __crt_va_end(arguments_list);
 
-            return set(key, buffer);
+            auto result = set(key, buffer);
+            delete[] buffer;
+
+            return result;
+        }
+
+        __forceinline bool iset(const string_t& key, const readable_config& inner) noexcept {
+            if (inner.empty()) return false;
+            auto value = inner.data();
+            return set(key, base64::encode(value.data(), value.size()));
         }
     };
 }

@@ -42,53 +42,133 @@
 #define VEC_3_BOOL_OPERATOR(OPERAND)    __forceinline bool operator OPERAND (vec3 right) { return axis.x OPERAND right.axis.x && axis.y OPERAND right.axis.y && axis.z OPERAND right.axis.z; }
 #define VEC_4_BOOL_OPERATOR(OPERAND)    __forceinline bool operator OPERAND (vec4 right) { return axis.x OPERAND right.axis.x && axis.y OPERAND right.axis.y && axis.z OPERAND right.axis.z && axis.w OPERAND right.axis.w; }
 
+#define VEC_NORMALIZE(VAL, MIN, MAX) (((VAL) - (MIN)) / ((MAX) - (MIN)))
 
+#define COL_CHANNELS red, green, blue, alpha
+/*
+
+надо потом нормально сделать через наследование а не вот это вот всё
+
+*/
 namespace ncore {
     IMP_VEC(2); //vec2
     IMP_VEC(3); //vec3
     IMP_VEC(4); //vec4
 
-    typedef union col4 {
+    typedef union rgba {
+        union normalized {
+            struct {
+                float COL_CHANNELS;
+            }channel;
+            vec4f vec;
+
+            __forceinline normalized(const vec4f& vec) {
+                this->vec = vec;
+            }
+
+            __forceinline rgba native() const noexcept {
+                auto result = rgba();
+                for (char c = 0; c < 4; c++) {
+                    result[c] = unsigned char(255.f * vec.array[c]);
+                }
+                return result;
+            }
+        };
+
         struct {
-            unsigned char red, green, blue, alpha;
-        }chanel;
+            unsigned char COL_CHANNELS;
+        }channel;
         unsigned ui32;
 
-        __forceinline col4(unsigned ui32 = 0x0) {
-            *this = *(col4*)&ui32;
+
+        __forceinline rgba(unsigned ui32 = 0x0) noexcept {
+            *this = *(rgba*)&ui32;
         }
 
-        __forceinline col4(unsigned char* chanel) {
-            *this = *(col4*)chanel;
+        __forceinline rgba(unsigned char* channel) noexcept {
+            *this = *(rgba*)channel;
         }
 
-        __forceinline col4(unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha) {
-            chanel.red = red;
-            chanel.green = green;
-            chanel.blue = blue;
-            chanel.alpha = alpha;
+        __forceinline rgba(const rgba& source) noexcept {
+            *this = source;
         }
 
-        __forceinline bool operator==(const col4& right) {
+        __forceinline rgba(const normalized& source) noexcept {
+            *this = source.native();
+        }
+
+        __forceinline rgba(unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha) noexcept {
+            channel.red = red;
+            channel.green = green;
+            channel.blue = blue;
+            channel.alpha = alpha;
+        }
+
+
+        __forceinline normalized normalize() const noexcept {
+            auto normalized = vec4f();
+            for (char c = 0; c < 4; c++) {
+                normalized[c] = float((*this)[c]) / 255.f;
+            }
+            return normalized;
+        }
+
+        __forceinline rgba linear_gradient(const rgba& second, float coef = 1.f) const noexcept {
+            auto left = normalize();
+            auto right = second.normalize();
+
+            for (char c = 0; c < 4; c++) {
+                left.vec[c] = left.vec[c] + (right.vec[c] - left.vec[c]) * coef;
+            }
+
+            return left.native();
+        }
+
+        __forceinline rgba between(const rgba& right) noexcept {
+            return rgba(
+                (channel.red + right.channel.red) / 2,
+                (channel.green + right.channel.green) / 2,
+                (channel.blue + right.channel.blue) / 2,
+                (channel.alpha + right.channel.alpha) / 2);
+        }
+
+        __forceinline rgba reverse(bool skipAplha = true) const noexcept {
+            auto result = rgba(*this);
+            for (auto& channel : result) {
+                channel = 0xff - channel;
+            }
+
+            if (skipAplha) {
+                result.channel.alpha = channel.alpha;
+            }
+
+            return result;
+        }
+
+        __forceinline unsigned char* begin() noexcept {
+            return (unsigned char*)this;
+        }
+
+        __forceinline unsigned char* end() noexcept {
+            return (unsigned char*)this + sizeof(rgba);
+        }
+
+        __forceinline bool operator==(const rgba& right) noexcept {
             return ui32 == right.ui32; 
         }
 
-        __forceinline bool operator!=(const col4& right) { 
+        __forceinline bool operator!=(const rgba& right) noexcept {
             return !(*this == right);
         }
 
-        __forceinline unsigned* operator&() {
+        __forceinline unsigned* operator&() noexcept {
             return (unsigned*)this; 
         }
 
-        __forceinline col4 operator+(const col4& right) {
-            return col4(
-                (chanel.red + right.chanel.red) / 2, 
-                (chanel.green + right.chanel.green) / 2, 
-                (chanel.blue + right.chanel.blue) / 2, 
-                (chanel.alpha + right.chanel.alpha) / 2); 
+        __forceinline constexpr unsigned char& operator[](size_t index) const noexcept {
+            return *((unsigned char*)this + index);
         }
-    }rgba;
+    }col4;
 
     typedef struct vrgba {
         rgba color;
