@@ -1,5 +1,5 @@
 #include "includes/cpr/cpr.h"
-#include "../src/web.hpp"
+#include "../source/web.hpp"
 
 #pragma comment(lib, "cpr.lib")
 #pragma comment(lib, "libcurl.lib")

@@ -22,7 +22,7 @@
     <ClCompile Include="web.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\web.hpp" />
+    <ClInclude Include="..\source\web.hpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
@@ -78,7 +78,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)src\includes\web\</OutDir>
+    <OutDir>$(SolutionDir)source\includes\web\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>$(SolutionDir)$(Platform)\$(ProjectName)\$(Configuration)\</OutDir>

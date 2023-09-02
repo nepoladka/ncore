@@ -4,6 +4,6 @@
     <ClCompile Include="web.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\src\web.hpp" />
+    <ClInclude Include="..\source\web.hpp" />
   </ItemGroup>
 </Project>
