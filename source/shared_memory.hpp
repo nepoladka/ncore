@@ -14,9 +14,9 @@ namespace ncore {
 			handle_t handle = nullptr;
 			bool allocated = false;
 
-			string name = string();
+			std::string name = std::string();
 
-			__forceinline bool allocate(const string& name, size_t size) {
+			__forceinline bool allocate(const std::string& name, size_t size) {
 				if (!(handle = CreateFileMappingA(INVALID_HANDLE_VALUE, NULL, PAGE_READWRITE, NULL, DWORD(size), (this->name = name).c_str()))) return false;
 
 				if (address = (byte_t*)MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, NULL, NULL, size)) return true;
@@ -26,7 +26,7 @@ namespace ncore {
 				return false;
 			}
 
-			__forceinline bool attach(const string& name, size_t size) {
+			__forceinline bool attach(const std::string& name, size_t size) {
 				if (!(handle = OpenFileMappingA(FILE_MAP_ALL_ACCESS, FALSE, (this->name = name).c_str()))) return false;
 
 				if (address = (byte_t*)MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, NULL, NULL, size)) return true;
@@ -55,7 +55,7 @@ namespace ncore {
 			}
 		}_wrapper;
 
-		__forceinline shared_memory(const string& memoryName, size_t memorySize, bool allocate) {
+		__forceinline shared_memory(const std::string& memoryName, size_t memorySize, bool allocate) {
 			if (allocate)
 				_wrapper.allocated = _wrapper.allocate(memoryName, memorySize);
 			else
@@ -70,14 +70,14 @@ namespace ncore {
 		}
 
 	public:
-		static __forceinline shared_memory* create(const string& memoryName, size_t memorySize) {
+		static __forceinline shared_memory* create(const std::string& memoryName, size_t memorySize) {
 			auto res = new shared_memory(memoryName, memorySize, true);
 			if (res->valid()) return res;
 			delete res;
 			return nullptr;
 		}
 
-		static __forceinline shared_memory* attach(const string& memoryName, size_t memorySize) {
+		static __forceinline shared_memory* attach(const std::string& memoryName, size_t memorySize) {
 			auto res = new shared_memory(memoryName, memorySize, false);
 			if (res->valid()) return res;
 			delete res;

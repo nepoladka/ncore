@@ -9,17 +9,17 @@ namespace ncore {
 		_t _values[_capacity];
 
 	public:
-		static __forceinline static_array* from_native(const _t* native) {
+		static __forceinline static_array* from_native(const _t* native) noexcept {
 			return (static_array*)native;
 		}
 
-		__forceinline static_array(const _t data[_capacity] = nullptr, size_t size = _capacity) {
+		__forceinline static_array(const _t data[_capacity] = nullptr, size_t size = _capacity) noexcept {
 			for (size_t i = 0; i < _capacity; i++) {
 				_values[i] = (data && i < size) ? data[i] : _t();
 			}
 		}
 
-		__forceinline static_array(const _t data, ...) {
+		__forceinline static_array(const _t data, ...) noexcept {
 			va_list list;
 			va_start(list, _capacity);
 
@@ -87,6 +87,13 @@ namespace ncore {
 
 		__forceinline constexpr const _t& at(size_t index) const noexcept {
 			return _values[index];
+		}
+
+		__forceinline constexpr const void copy(static_array& destination) const noexcept {
+			auto length = min(capacity(), destination.capacity());
+			for (auto i = 0; i < length; i++) {
+				destination._values[i] = _values[i];
+			}
 		}
 
 		__forceinline constexpr _t& operator[](size_t index) noexcept {

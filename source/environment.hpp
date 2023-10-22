@@ -2,7 +2,7 @@
 #include <windows.h>
 #include "includes/ntos.h"
 
-#define NtCurrentTeb() ((TEB*)(__readgsqword(FIELD_OFFSET(NT_TIB, Self))))
+#define NtCurrentTeb() (PTEB(__readgsqword(offsetof(NT_TIB, Self))))
 
 #define __thread_environment NtCurrentTeb()
 #define __process_environment (__thread_environment->ProcessEnvironmentBlock)

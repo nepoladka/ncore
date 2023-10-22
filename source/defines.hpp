@@ -30,6 +30,14 @@ const_value(double, __m_rad, 180.0 / M_PI);
 #define M_RAD (__m_rad)
 #endif
 
+#ifndef max
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef min
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
+
 #define align_up(VALUE, ALIGNMENT) (((VALUE) + (ALIGNMENT) - 1) & ~((ALIGNMENT) - 1))
 #define align_down(VALUE, ALIGNMENT) ((VALUE) & ~((ALIGNMENT) - 1))
 #define align_page_up(X) align_up(unsigned __int64(X), PAGE_SIZE)
@@ -40,6 +48,7 @@ const_value(double, __m_rad, 180.0 / M_PI);
 #define sizeofarr(ARRAY) (sizeof(ARRAY) / sizeof(*(ARRAY)))
 #define size_of_array sizeofarr
 
+#define proc_type_conv(CONVERSION, RETURN, NAME, ...) RETURN(CONVERSION* NAME)(__VA_ARGS__)
 #define proc_type(RETURN, NAME, ...) RETURN(*NAME)(__VA_ARGS__)
 #define get_procedure_t proc_type
 
@@ -55,7 +64,7 @@ const_value(double, __m_rad, 180.0 / M_PI);
 
 #define __tryif(STATE) if (STATE) __try
 #define __catch __except(true)
-#define __nocatch __catch { }
+#define __endtry __catch { }
 #define __extern extern "C"
 #define __extern_export __extern __declspec(dllexport)
 #define __extern_import __extern __declspec(dllimport)
@@ -72,14 +81,25 @@ namespace ncore {
 		using ui32_t = unsigned __int32;
 		using ui64_t = unsigned __int64;
 
+		using ui8_p = ui8_t*;
+		using ui16_p = ui16_t*;
+		using ui32_p = ui32_t*;
+		using ui64_p = ui64_t*;
+
 		using sbyte_t = i8_t;
 		using sbyte_p = sbyte_t*;
 
 		using byte_t = ui8_t;
 		using byte_p = byte_t*;
 
+		using lssize_t = i32_t;
+		using lsize_t = ui32_t;
+
 		using ssize_t = i64_t;
+		using ssize_p = ssize_t*;
+
 		using size_t = ui64_t;
+		using size_p = size_t*;
 
 		using scount_t = i64_t;
 		using count_t = ui64_t;

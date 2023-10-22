@@ -48,7 +48,7 @@ namespace ncore {
 		std::vector<readable_byte_t> _data;
 
 	public:
-		__forceinline readable_byte_array(const std::string& readable, char separator = ' ') {
+		__forceinline readable_byte_array(const std::string& readable, char separator = ' ') noexcept {
 			auto parts = strings::split_string(readable, separator);
 
 			for (auto& part : parts) {
@@ -60,7 +60,22 @@ namespace ncore {
 			_bytes_count = _data.size();
 		}
 
-		__forceinline std::vector<byte_t> bytes() {
+		__forceinline readable_byte_array(const void* bytes, size_t length, char separator = ' ') noexcept {
+			auto readable = std::string();
+
+			for (auto current = byte_p(bytes), end = byte_p(bytes) + length; current != end; current++) {
+				auto byte = readable_byte_t(*current);
+				
+				readable += { byte.str[0], byte.str[1], separator };
+				_data.push_back(byte);
+			}
+
+			_readable = readable.substr(0, readable.length() - 1);
+			_separator = separator;
+			_bytes_count = _data.size();
+		}
+
+		__forceinline std::vector<byte_t> bytes() noexcept {
 			auto result = std::vector<byte_t>();
 			for (auto& part : _data) {
 				result.push_back(part.byte());
@@ -68,7 +83,7 @@ namespace ncore {
 			return result;
 		}
 
-		__forceinline std::string readable() {
+		__forceinline std::string readable() noexcept {
 			return _readable;
 		}
 	};

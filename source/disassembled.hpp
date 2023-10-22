@@ -91,7 +91,7 @@ namespace ncore::disassembled {
 
 		address_t address;
 
-		__forceinline code(byte_t* code, size_t length, address_t address = nullptr, bool save_bytes = false) {
+		__forceinline code(const byte_p code, size_t length, address_t address = nullptr, bool save_bytes = false) noexcept {
 			this->address = address = (address ? address : address_t(code));
 
 			auto instruction = disassembled::instruction();
@@ -123,6 +123,16 @@ namespace ncore::disassembled {
 
 		__forceinline constexpr const size_t size() const noexcept {
 			return base_t::size();
+		}
+
+		__forceinline std::string readable(const std::string& separator = "\n") const noexcept {
+			auto result = std::string();
+
+			for (auto& instruction : *this) {
+				result += separator + instruction.readable();
+			}
+
+			return result.substr(separator.length());
 		}
 
 		__forceinline instruction* data() noexcept {

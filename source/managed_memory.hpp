@@ -3,6 +3,14 @@
 #include <windows.h>
 #include "includes/ntos.h"
 
+#ifndef max
+#define max(a,b) (((a) > (b)) ? (a) : (b))
+#endif
+
+#ifndef min
+#define min(a,b) (((a) < (b)) ? (a) : (b))
+#endif
+
 namespace ncore {
 	using memory_allocator_t = get_procedure_t(address_t, , size_t);
 	using memory_reallocator_t = get_procedure_t(address_t, , address_t, size_t);

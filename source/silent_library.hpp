@@ -15,8 +15,18 @@
 namespace ncore {
     static constexpr const unsigned const __protectionFlags[2][2][2] = { { {PAGE_NOACCESS, PAGE_WRITECOPY}, {PAGE_READONLY, PAGE_READWRITE}, }, { {PAGE_EXECUTE, PAGE_EXECUTE_WRITECOPY}, {PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE}, }, };
 
-    class silent_library {
-    private:
+    typedef class silent_library {
+    public:
+        struct export_name_entry {
+            short index;
+            char* name;
+
+            __forceinline address_t address(address_t base, ui32_t functions) {
+                return address_t(ui64_t(base) + (*ui32_p(ui64_t(base) + functions + (index * sizeof(ui32_t)))));
+            }
+        };
+
+    protected:
         using dll_entry_t = i32_t(*)(address_t, ui32_t, address_t);
         using exe_entry_t = i32_t(*)(void);
         using hmodule_t = HMODULE;
@@ -32,11 +42,6 @@ namespace ncore {
             size_t size;
             unsigned characteristics;
             bool last;
-        };
-
-        struct export_name_entry {
-            short index;
-            char* name;
         };
 
         byte_t* code_base;
@@ -360,7 +365,7 @@ namespace ncore {
             auto headers = (byte_t*)VirtualAlloc(code, old_header->OptionalHeader.SizeOfHeaders, MEM_COMMIT, PAGE_READWRITE);
 
             memcpy(headers, dos_header, old_header->OptionalHeader.SizeOfHeaders);
-            result->headers = (PIMAGE_NT_HEADERS) & ((const unsigned char*)(headers))[dos_header->e_lfanew];
+            result->headers = PIMAGE_NT_HEADERS(&((const unsigned char*)(headers))[dos_header->e_lfanew]);
 
             result->headers->OptionalHeader.ImageBase = (uintptr_t)code;
 
@@ -404,7 +409,7 @@ namespace ncore {
                 __tryif(dynamic_link) {
                     auto entry = dll_entry_t(code_base + headers->OptionalHeader.AddressOfEntryPoint);
                     entry(code_base, DLL_PROCESS_DETACH, nullptr);
-                } __nocatch;
+                } __endtry;
 
                 initialized = false;
             }
@@ -430,6 +435,42 @@ namespace ncore {
             return release_pointer_list(blocked_memory);
         }
 
+        __forceinline std::vector<export_name_entry> exports(PIMAGE_EXPORT_DIRECTORY exports_directory = nullptr, bool sort = false) {
+            auto result = std::vector<export_name_entry>();
+
+            if (!exports_directory) {
+                auto directory = get_header_dictionary(this, IMAGE_DIRECTORY_ENTRY_EXPORT);
+                if (!directory->Size) goto _Exit;
+
+                exports_directory = PIMAGE_EXPORT_DIRECTORY(code_base + directory->VirtualAddress);
+                if (exports_directory->NumberOfNames == 0 || exports_directory->NumberOfFunctions == 0) goto _Exit;
+            }
+
+            if (exports_table) {
+            _Insert:
+                result.insert(result.begin(), exports_table, exports_table + exports_directory->NumberOfNames);
+
+            _Exit: return result;
+            }
+
+            auto name_reference = (unsigned*)(code_base + exports_directory->AddressOfNames);
+            auto ordinal = (unsigned short*)(code_base + exports_directory->AddressOfNameOrdinals);
+
+            auto entry = (export_name_entry*)calloc(exports_directory->NumberOfNames, sizeof(export_name_entry));
+            if (!(exports_table = entry)) goto _Exit;
+
+            for (int i = 0; i < exports_directory->NumberOfNames; i++, name_reference++, ordinal++, entry++) {
+                entry->name = (char*)(code_base + (*name_reference));
+                entry->index = *ordinal;
+            }
+
+            if (sort) {
+                qsort(exports_table, exports_directory->NumberOfNames, sizeof(export_name_entry), (_CoreCrtNonSecureSearchSortCompareFunction)compare);
+            }
+
+            goto _Insert;
+        }
+
         __forceinline address_t search_export(const char* name) {
             auto directory = get_header_dictionary(this, IMAGE_DIRECTORY_ENTRY_EXPORT);
             if (!directory->Size) _Fail: return nullptr;
@@ -448,14 +489,14 @@ namespace ncore {
             }
             else {
                 if (!exports_table) {
-                    auto nameRef = (unsigned*)(code_base + exports->AddressOfNames);
+                    auto name_reference = (unsigned*)(code_base + exports->AddressOfNames);
                     auto ordinal = (unsigned short*)(code_base + exports->AddressOfNameOrdinals);
 
                     auto entry = (export_name_entry*)malloc(exports->NumberOfNames * sizeof(export_name_entry));
                     if (!(exports_table = entry)) goto _Fail;
 
-                    for (int i = 0; i < exports->NumberOfNames; i++, nameRef++, ordinal++, entry++) {
-                        entry->name = (char*)(code_base + (*nameRef));
+                    for (int i = 0; i < exports->NumberOfNames; i++, name_reference++, ordinal++, entry++) {
+                        entry->name = (char*)(code_base + (*name_reference));
                         entry->index = *ordinal;
                     }
 
@@ -469,7 +510,7 @@ namespace ncore {
 
             if (index > exports->NumberOfFunctions) goto _Fail;
 
-            return (address_t)(code_base + (*(DWORD*)(code_base + exports->AddressOfFunctions + (index * 4))));
+            return address_t(code_base + (*(DWORD*)(code_base + exports->AddressOfFunctions + (index * 4))));
         }
 
         __forceinline int call_entry(unsigned call_reason, address_t reserved = nullptr) {
@@ -486,5 +527,5 @@ namespace ncore {
 
             return module->exe_entry();
         }
-    };
+    }*silent_library_p, *silent_library_h;
 };

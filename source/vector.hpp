@@ -6,8 +6,6 @@
 #include <type_traits>
 
 namespace ncore {
-    using namespace std;
-
     template <class T>
     inline void construct_range(T* begin, T* end)
     {

@@ -3,6 +3,7 @@
 #include "handle.hpp"
 #include "static_array.hpp"
 #include "environment.hpp"
+#include "strings.hpp"
 #include <tlhelp32.h>
 #include <psapi.h>
 #include <string>
@@ -11,11 +12,11 @@
 namespace ncore {
     static const handle::native_handle_t::closer_t const __processHandleCloser = handle::native_handle_t::closer_t(NtClose);
     static const handle::native_handle_t::closer_t const __snapshotHandleCloser = handle::native_handle_t::closer_t(NtClose);
-    static constexpr const unsigned const __defaultOpenAccess = PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION;
+    static constexpr const unsigned const __defaultProcessOpenAccess = PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION;
 
     class process;
 
-    template<unsigned _bufferSize = 1024> static __forceinline std::vector<process> get_processes(unsigned open_access = __defaultOpenAccess);
+    template<unsigned _bufferSize = 1024> static __forceinline std::vector<process> get_processes(unsigned open_access = __defaultProcessOpenAccess);
 
     class process {
     public:
@@ -34,9 +35,14 @@ namespace ncore {
             }
 
             template<size_t _bufferSize = 0xff> __forceinline std::string __fastcall get_title() const noexcept {
-                char buffer[_bufferSize] = { null };
-                GetWindowTextA(handle, buffer, sizeofarr(buffer));
-                return buffer;
+                auto buffer = static_array<wchar_t, _bufferSize>();
+                auto title = static_array<char, _bufferSize>();
+
+                if (GetWindowTextW(handle, buffer.data(), sizeofarr(buffer))) {
+                    u16tou8(buffer.data(), sizeofarr(buffer), title.data(), sizeofarr(title));
+                }
+
+                return title.data();
             }
 
             __forceinline bool alive() const noexcept {
@@ -64,42 +70,69 @@ namespace ncore {
             }
         };
 
-        class module_t : private MODULEENTRY32 { //todo: move it to single file
+        class module_t { //todo: move it to single file 
         public:
+            using flags_t = decltype(_LDR_DATA_TABLE_ENTRY_COMPATIBLE::ENTRYFLAGSUNION);
+
             struct export_t {
                 address_t module;
 
                 ui16_t ordinal;
                 address_t address;
                 static_array<char, 0xff> name;
+
+                __forceinline constexpr offset_t offset() const noexcept {
+                    return ui64_t(address) - ui64_t(module);
+                }
             };
 
-            __forceinline module_t() : MODULEENTRY32() {
-                dwSize = sizeof(MODULEENTRY32);
+            __forceinline module_t() = default;
+
+            __forceinline __fastcall module_t(id_t process, address_t image, address_t entry, size_t size, ui16_t tls, flags_t flags, char* path, char* name) noexcept {
+                _process_id = process;
+                _address = image;
+                _entry_point = entry;
+                _size = size;
+                _tls_index = tls;
+                _flags = flags;
+                _path = path;
+                _name = name;
             }
 
-        private:
+        protected:
+            id_t _process_id;
+
+            address_t _address, _entry_point;
+            size_t _size;
+            ui16_t _tls_index;
+            flags_t _flags;
+
+            static_array<char, 0xff> _path, _name;
+
             template<typename data_t = const void*> using export_enumeration_callback_t = get_procedure_t(bool, , export_t&, data_t, bool*);
 
-            template<typename data_t = const void*> __forceinline bool enumerate_exports(const process& process, export_enumeration_callback_t<data_t> callback, data_t data) const noexcept {
-                auto image_header = process.read_memory<IMAGE_DOS_HEADER>(address_t(modBaseAddr));
-                if (image_header.e_magic != IMAGE_DOS_SIGNATURE) _Fail: return false;
+            template<typename data_t = const void*> __forceinline bool enumerate_exports(export_enumeration_callback_t<data_t> callback, data_t data) const noexcept {
+                auto process = this->process();
 
-                auto nt_headers = process.read_memory<IMAGE_NT_HEADERS>(address_t(modBaseAddr + image_header.e_lfanew));
-                if (nt_headers.Signature != IMAGE_NT_SIGNATURE) goto _Fail;
+                auto image_base = address<ui64_t>();
+                auto image = process.read_memory<IMAGE_DOS_HEADER>(address_t(image_base));
+                if (image.e_magic != IMAGE_DOS_SIGNATURE) _Fail: return false;
 
-                auto export_directory_offset = nt_headers.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
+                auto headers = process.read_memory<IMAGE_NT_HEADERS>(address_t(image_base + image.e_lfanew));
+                if (headers.Signature != IMAGE_NT_SIGNATURE) goto _Fail;
+
+                auto export_directory_offset = headers.OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT].VirtualAddress;
                 if (!export_directory_offset) goto _Fail;
 
-                auto export_directory = process.read_memory<IMAGE_EXPORT_DIRECTORY>(address_t(modBaseAddr + export_directory_offset));
+                auto export_directory = process.read_memory<IMAGE_EXPORT_DIRECTORY>(address_t(image_base + export_directory_offset));
 
-                auto addresses_table = (ui32_t*)(modBaseAddr + export_directory.AddressOfFunctions);
-                auto names_table = (ui32_t*)(modBaseAddr + export_directory.AddressOfNames);
-                auto ordinals_table = (ui16_t*)(modBaseAddr + export_directory.AddressOfNameOrdinals);
+                auto addresses_table = (ui32_t*)(image_base + export_directory.AddressOfFunctions);
+                auto names_table = (ui32_t*)(image_base + export_directory.AddressOfNames);
+                auto ordinals_table = (ui16_t*)(image_base + export_directory.AddressOfNameOrdinals);
 
                 for (size_t i = 0; i < export_directory.NumberOfNames; i++) {
                     auto name_offset = process.read_memory<ui32_t>(names_table + i);
-                    auto export_name = process.read_memory<static_array<char, 0xff>>(modBaseAddr + name_offset);
+                    auto export_name = process.read_memory<static_array<char, 0xff>>(address_t(image_base + name_offset));
 
                     if (export_name.data() != export_name) continue;
 
@@ -107,9 +140,9 @@ namespace ncore {
                     auto offset = process.read_memory<ui32_t>(addresses_table + ordinal);
 
                     auto info = export_t{
-                        modBaseAddr,
+                        address_t(image_base),
                         ordinal,
-                        modBaseAddr + offset,
+                        address_t(image_base + offset),
                         export_name
                     };
 
@@ -121,48 +154,51 @@ namespace ncore {
             }
 
         public:
-            __forceinline constexpr MODULEENTRY32& base() const noexcept {
-                return *(MODULEENTRY32*)this;
+            template<typename _t = address_t> __forceinline constexpr auto address() const noexcept {
+                return _t(_address);
             }
 
-            __forceinline constexpr address_t address() const noexcept {
-                return modBaseAddr;
+            template<typename _t = address_t> __forceinline constexpr auto entry() const noexcept {
+                return _t(_entry_point);
             }
 
-            __forceinline constexpr size_t size() const noexcept {
-                return modBaseSize;
+            __forceinline constexpr auto size() const noexcept {
+                return _size;
             }
 
-            __forceinline constexpr std::string name() const noexcept {
-                return szModule;
+            __forceinline constexpr auto tls_index() const noexcept {
+                return _tls_index;
             }
 
-            __forceinline constexpr std::string path() const noexcept {
-                return szExePath;
+            __forceinline constexpr auto path() const noexcept {
+                return std::string(_path.data());
             }
 
-            __forceinline constexpr id_t process_id() const noexcept {
-                return th32ProcessID;
+            __forceinline constexpr auto name() const noexcept {
+                return std::string(_name.data());
             }
 
-            __forceinline constexpr id_t id() const noexcept {
-                return th32ModuleID;
+            __forceinline constexpr auto flags() const noexcept {
+                return _flags;
             }
 
-            __forceinline std::vector<export_t> get_exports(const process& process) const noexcept {
-                using result_t = std::vector<export_t>;
+            __forceinline auto process() const noexcept {
+                return ncore::process(_process_id);
+            }
 
-                static auto callback = [](export_t& info, result_t* _result, bool* _return) noexcept {
+            __forceinline auto get_exports() const noexcept {
+                auto result = std::vector<export_t>();
+
+                static auto callback = [](export_t& info, decltype(result)* _result, bool* _return) noexcept {
                     _result->push_back(info);
                     return !(*_return = true);
                 };
 
-                auto result = result_t();
-                enumerate_exports<result_t*>(process, callback, &result);
+                enumerate_exports<decltype(result)*>(callback, &result);
                 return result;
             }
 
-            __forceinline export_t search_export(const process& process, const std::string& name) const noexcept {
+            __forceinline auto search_export(const std::string& name) const noexcept {
                 struct searching_info {
                     std::string name;
                     export_t result;
@@ -180,13 +216,36 @@ namespace ncore {
                     export_t()
                 };
 
-                enumerate_exports<searching_info*>(process, callback, &info);
+                enumerate_exports<searching_info*>(callback, &info);
+
+                return info.result;
+            }
+
+            __forceinline auto search_export(const ui16_t ordinal) const noexcept {
+                struct searching_info {
+                    ui16_t ordinal;
+                    export_t result;
+                };
+
+                static auto callback = [](export_t& info, searching_info* _result, bool* _return) noexcept {
+                    if (*_return = (_result->ordinal == info.ordinal)) {
+                        _result->result = info;
+                    }
+                    return *_return;
+                };
+
+                auto info = searching_info{
+                    ordinal,
+                    export_t()
+                };
+
+                enumerate_exports<searching_info*>(callback, &info);
 
                 return info.result;
             }
         };
 
-        static __forceinline handle::native_t get_handle(id_t id, unsigned access = __defaultOpenAccess) {
+        static __forceinline handle::native_t get_handle(id_t id, unsigned access = __defaultProcessOpenAccess) {
             auto result = handle::native_t();
             auto attributes = OBJECT_ATTRIBUTES();
             auto client_id = CLIENT_ID();
@@ -217,15 +276,11 @@ namespace ncore {
         id_t _id;
         handle_t _handle;
 
-        __forceinline handle_t temp_handle(id_t id, const handle_t& source, unsigned open_access) const noexcept {
-            handle_t value;
-            if (!source) {
+        static __forceinline auto temp_handle(id_t id, const handle_t& source, unsigned open_access) noexcept {
+            auto value = source;
+            if (!value) {
                 (value = handle_t(get_handle(id, open_access), __processHandleCloser, false)).close_on_destroy(true);
             }
-            else {
-                value = source;
-            }
-
             return value;
         }
 
@@ -245,28 +300,46 @@ namespace ncore {
         }
 
         template<typename data_t = const void*> __forceinline address_t enumerate_modules(module_enumeration_callback_t<data_t> callback, data_t data, module_t* _module = nullptr) const noexcept {
-            auto snapshot = handle::native_handle_t(
-                CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, _id),
-                __snapshotHandleCloser,
-                true);
+            auto ldr = read_memory<PEB_LDR_DATA>(get_environment().Ldr);
 
-            if (!snapshot) _Fail: return nullptr;
-
-            auto module = module_t();
-
-            if (!Module32First(snapshot.get(), LPMODULEENTRY32(&module))) goto _Fail;
-
+            auto head = ldr.InLoadOrderModuleList.Flink;
+            auto current = head;
             do {
+                auto entry = read_memory<LDR_DATA_TABLE_ENTRY>(current);
+                current = entry.InLoadOrderLinks.Flink;
+
+                if (!entry.DllBase) continue;
+
+                auto buffer = static_array<wchar_t, 0xff>();
+
+                auto path = static_array<char, 0xff>();
+                auto name = static_array<char, 0xff>();
+
+                if (entry.FullDllName.Length) {
+                    read_memory(entry.FullDllName.Buffer, entry.FullDllName.MaximumLength, buffer.data());
+
+                    u16tou8(buffer.data(), sizeofarr(buffer), path.data(), sizeofarr(path));
+                }
+
+                if (entry.BaseDllName.Length) {
+                    read_memory(entry.BaseDllName.Buffer, entry.BaseDllName.MaximumLength, buffer.data());
+
+                    u16tou8(buffer.data(), sizeofarr(buffer), name.data(), sizeofarr(name));
+                }
+
+                auto module = module_t(_id, entry.DllBase, entry.EntryPoint, entry.SizeOfImage, entry.TlsIndex, entry.ENTRYFLAGSUNION, path.data(), name.data());
+
                 auto result = module.address();
                 if (!callback(module, data, &result)) continue;
 
-                if (_module)
+                if (_module) {
                     *_module = module;
+                }
 
                 return result;
-            } while (Module32Next(snapshot.get(), LPMODULEENTRY32(&module)));
+            } while (head != current);
 
-            goto _Fail;
+            return nullptr;
         }
 
     public:
@@ -289,7 +362,7 @@ namespace ncore {
             return process(id, open_access);
         }
 
-        static __forceinline process get_by_name(const std::string& name, unsigned open_access = __defaultOpenAccess) noexcept {
+        static __forceinline process get_by_name(const std::string& name, unsigned open_access = __defaultProcessOpenAccess) noexcept {
             auto processes = get_processes(open_access);
             for (auto& process : processes) {
                 if (process.get_name() == name) return ncore::process(process.id(), open_access);
@@ -331,7 +404,7 @@ namespace ncore {
             return _id;
         }
 
-        __forceinline handle::native_t handle(unsigned open_access = __defaultOpenAccess) const noexcept {
+        __forceinline handle::native_t handle(unsigned open_access = __defaultProcessOpenAccess) const noexcept {
             return _handle.get() ? _handle.get() : ((*(handle::native_handle_t*)&_handle) = handle::native_handle_t(get_handle(_id, open_access))).get();
         }
 
@@ -440,7 +513,7 @@ namespace ncore {
             goto _Exit;
         }
 
-        __forceinline std::string get_directory() {
+        __forceinline std::string get_directory() const noexcept {
             auto path = get_path();
 
             char drive[MAX_PATH]{ 0 };
@@ -450,7 +523,7 @@ namespace ncore {
             return drive + std::string(folder);
         }
 
-        __forceinline std::string get_name() {
+        __forceinline std::string get_name() const noexcept {
             auto path = get_path();
 
             char name[FILENAME_MAX + 1]{ 0 };
@@ -459,7 +532,7 @@ namespace ncore {
             return name;
         }
 
-        __forceinline std::string get_extension() {
+        __forceinline std::string get_extension() const noexcept {
             auto path = get_path();
 
             char extension[FILENAME_MAX + 1]{ 0 };
@@ -471,23 +544,22 @@ namespace ncore {
         __forceinline PEB get_environment() const noexcept {
             auto result = PEB();
 
-            auto handle = temp_handle(_id, _handle, __defaultOpenAccess);
+            auto handle = temp_handle(_id, _handle, __defaultProcessOpenAccess);
             if (!handle) _Exit: return result;
 
             auto information = PROCESS_BASIC_INFORMATION();
             auto information_length = ULONG(sizeof(information));
-            if (NT_ERROR(NtQueryInformationProcess(handle.get(), ProcessBasicInformation, &information, sizeof(PROCESS_BASIC_INFORMATION), &information_length))) goto _Exit;
+            if (NT_ERROR(NtQueryInformationProcess(handle.get(), ProcessBasicInformation, &information, information_length, &information_length))) goto _Exit;
 
-            auto environment = PEB();
-            if (NT_ERROR(NtReadVirtualMemory(handle.get(), information.PebBaseAddress, &environment, sizeof(environment), nullptr))) goto _Exit;
+            NtReadVirtualMemory(handle.get(), information.PebBaseAddress, &result, sizeof(result), nullptr);
 
-            return environment;
+            goto _Exit;
         }
 
         __forceinline std::string get_command_line() const noexcept {
             auto result = std::string();
 
-            auto handle = temp_handle(_id, _handle, __defaultOpenAccess);
+            auto handle = temp_handle(_id, _handle, __defaultProcessOpenAccess);
             if (!handle) _Exit: return result;
 
             auto information = PROCESS_BASIC_INFORMATION();
@@ -515,6 +587,30 @@ namespace ncore {
             goto _Exit;
         }
 
+        __forceinline std::vector<id_t> get_threads(unsigned open_access = THREAD_ALL_ACCESS) const noexcept {
+            auto result = std::vector<id_t>();
+
+            auto snapshot = handle::native_handle_t(
+                CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, _id),
+                __snapshotHandleCloser,
+                true);
+
+            if (!snapshot) _Exit: return result;
+
+            auto thread = THREADENTRY32{ sizeof(THREADENTRY32) };
+            if (!Thread32First(snapshot.get(), &thread)) goto _Exit;
+
+            do {
+                if (thread.th32OwnerProcessID == _id) {
+                    result.push_back(thread.th32ThreadID);
+                }
+
+                thread.dwSize = sizeof(THREADENTRY32);
+            } while (Thread32Next(snapshot.get(), &thread));
+
+            goto _Exit;
+        }
+
         __forceinline address_t get_base() const noexcept {
             return get_environment().ImageBaseAddress;
         }
@@ -537,34 +633,45 @@ namespace ncore {
             return results;
         }
 
-        __forceinline std::vector<module_t> get_modules() const noexcept {
-            using result_t = std::vector<module_t>;
+        __forceinline auto get_modules() const noexcept {
+            auto result = std::vector<module_t>();
 
-            static auto callback = [](module_t& module, result_t* result, address_t* _return) {
+            static auto callback = [](module_t& module, decltype(result)* result, address_t* _return) {
                 result->push_back(module);
                 return false;
             };
 
-            auto result = result_t();
-            enumerate_modules<result_t*>(callback, &result);
+            enumerate_modules<decltype(result)*>(callback, &result);
             return result;
         }
 
+        __forceinline auto get_exports(const std::string& module_name, module_t* _module = nullptr) const noexcept {
+            auto result = std::vector<module_t::export_t>();
 
-        __forceinline std::vector<module_t::export_t> search_exports(const std::string& name, size_t max_results_count = 1) const noexcept {
-            using result_t = std::vector<module_t::export_t>;
+            auto module = module_t();
+            if (search_module(module_name, &module)) {
+                if (_module) {
+                    *_module = module;
+                }
 
+                result = module.get_exports();
+            }
+
+            return result;
+        }
+
+        __forceinline auto search_exports(const std::string& name, size_t max_results_count = 1) const noexcept {
             struct searching_info {
                 const process* instance;
-                result_t results;
+                std::vector<module_t::export_t> results;
                 size_t max_results_count;
                 std::string name;
             };
             
             static auto callback = [](module_t& module, searching_info* data, address_t* _return) noexcept {
-                auto export_info = module.search_export(*data->instance, data->name);
+                auto export_info = module.search_export(data->name);
                 if (export_info.module) {
-                    if (data->results.size() == data->max_results_count) return true;
+                    if (data->results.size() >= data->max_results_count) return true;
 
                     data->results.push_back(export_info);
                 }
@@ -574,7 +681,7 @@ namespace ncore {
 
             auto info = searching_info{
                 this,
-                result_t(),
+                decltype(searching_info::results)(),
                 max_results_count ? max_results_count : 1,
                 name 
             };
@@ -590,6 +697,14 @@ namespace ncore {
             };
 
             return enumerate_modules<const std::string*>(callback, &string_utils::to_lower(name), _module);
+        }
+
+        __forceinline address_t get_address_base(address_t address, module_t* _module = nullptr) const noexcept {
+            static auto callback = [](module_t& module, ui64_t address, address_t* _return) noexcept {
+                return address >= module.address<ui64_t>() && address <= (module.address<ui64_t>() + module.size());
+            };
+
+            return enumerate_modules<ui64_t>(callback, ui64_t(address), _module);
         }
 
         __forceinline bool load_library(const std::string& file) noexcept {
@@ -645,30 +760,93 @@ namespace ncore {
             goto _Exit;
         }
 
+        __forceinline constexpr bool write_memory(address_t address, const void* data, size_t size) noexcept {
+            if (address && data && size) {
+                if (_id == __process_id) return memcpy(address, data, size);
+
+                auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
+                auto handle_value = handle.get();
+                if (handle_value) return NT_SUCCESS(NtWriteVirtualMemory(handle_value, address, address_t(data), size, nullptr));
+            }
+
+            return false;
+        }
+
         template<typename _t> __forceinline constexpr bool write_memory(address_t address, const _t& data) noexcept {
-            auto result = bool(false);
+            return write_memory(address, &data, sizeof(_t));
+        }
 
-            if (!address) _Exit: return result;
+        __forceinline constexpr bool read_memory(address_t address, size_t size, void* _data) const noexcept {
+            if (address && size && _data) {
+                if (_id == __process_id) return memcpy(_data, address, size);
+                
+                auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
+                auto handle_value = handle.get();
+                if (handle_value) return NT_SUCCESS(NtReadVirtualMemory(handle_value, address, _data, size, nullptr));
+            }
 
-            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
-            if (!handle) goto _Exit;
-
-            result = NT_SUCCESS(NtWriteVirtualMemory(handle.get(), address, address_t(&data), sizeof(_t), nullptr));
-
-            goto _Exit;
+            return false;
         }
 
         template<typename _t> __forceinline constexpr _t read_memory(address_t address) const noexcept {
             auto result = _t();
-
-            if (address) {
-                auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
-                if (handle.get()) {
-                    NtReadVirtualMemory(handle.get(), address, &result, sizeof(_t), nullptr);
-                }
-            }
-            
+            read_memory(address, sizeof(_t), &result);
             return result;
+        }
+
+        __forceinline constexpr bool dump_memory(address_t address, size_t size, void* _data) const noexcept {
+            if (!(size && _data)) return false;
+
+            const auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS).get();
+            if (!handle) return false;
+
+            auto remain = size;
+            auto readed = size_t(), offset = offset_t();
+            do {
+                auto block_info = MEMORY_BASIC_INFORMATION();
+                if (NT_ERROR(NtQueryVirtualMemory(handle, byte_p(address) + offset, MEMORY_INFORMATION_CLASS::MemoryBasicInformation, &block_info, sizeof(block_info), nullptr))) break;
+
+                if (!block_info.RegionSize) {
+                    block_info.RegionSize = PAGE_SIZE;
+                }
+
+                if (block_info.State == MEM_FREE || block_info.Protect == PAGE_NOACCESS) {
+                    readed = block_info.RegionSize;
+                }
+                else {
+                    auto count = remain;
+                    do {
+                        auto source = byte_p(address) + offset;
+                        auto destination = byte_p(_data) + offset;
+
+                        NtReadVirtualMemory(handle, source, destination, count, &readed);
+                        if (readed) break;
+
+                        if (!count) return true;
+
+                        if (source == block_info.BaseAddress) {
+                            if (count == block_info.RegionSize) {
+                                readed = block_info.RegionSize;
+
+                                break;
+                            }
+
+                        }
+                        else {
+                            offset -= (ui64_t(source) - ui64_t(block_info.BaseAddress));
+                        }
+
+                        count = block_info.RegionSize;
+                    } while (true);
+                }
+
+                if (readed >= remain) break;
+
+                remain -= readed;
+                offset += readed;
+            } while (remain > 0);
+
+            return true;
         }
     };
 

@@ -3,7 +3,7 @@
 #include "strings.hpp"
 #include "dimension_vector.hpp"
 #include "thread.hpp"
-#include "files.hpp"
+#include "file.hpp"
 #include <tlhelp32.h>
 
 #define minmax(MIN, VAL, MAX) max(min(VAL, MAX), MIN)
@@ -785,7 +785,7 @@ namespace ncore {
 
             auto target = strings::string_to_lower(process);
 
-            auto directory = std::filesystem::recursive_directory_iterator(ncore::files::system_directory() + "..\\Prefetch");
+            auto directory = std::filesystem::recursive_directory_iterator(system_directory() + "..\\Prefetch");
             for (const auto& file : directory) {
                 auto path = strings::string_to_lower(file.path().string());
                 if (path.find(target) == std::string::npos) continue;
@@ -796,11 +796,11 @@ namespace ncore {
             return count;
         }
 
-        static __forceinline void* duplicate(void* source, size_t length) noexcept {
+        static __forceinline void* duplicate(const void* source, size_t length) noexcept {
             return memcpy(malloc(length), source, length);
         }
 
-        static __forceinline void reverse_copy(void* destination, void* source, size_t length) noexcept {
+        static __forceinline void reverse_copy(void* destination, const void* source, size_t length) noexcept {
             auto dst = (byte_t*)destination;
             auto src = (byte_t*)source + length - 1;
 
@@ -813,6 +813,16 @@ namespace ncore {
             auto buffer = duplicate(data, length);
             reverse_copy(data, buffer, length);
             free(buffer);
+        }
+
+        __forceinline auto read_console_line(const std::string& reason = std::string()) noexcept {
+            if (!reason.empty())
+                printf(reason.c_str());
+
+            auto result = std::string();
+            std::getline(std::cin, result);
+
+            return result;
         }
     }
 

@@ -1,11 +1,9 @@
 #pragma once
-#include "defines.hpp"
-#include "files.hpp"
+#include "file.hpp"
 #include "silent_library.hpp"
 #include "includes/kdu/kdu.dll.h"
 #include "includes/kdu/drv64.dll.h"
 #include <ntstatus.h>
-#include <string>
 
 namespace ncore {
 	using nt_status_t = NTSTATUS;
@@ -18,19 +16,25 @@ namespace ncore {
 		using map_file_image_t = const address_t(*)(const address_t);
 		using unmap_file_image_t = void (*)(const address_t);
 
-		ncore::silent_library* _library = nullptr;
+		silent_library* _library = nullptr;
+		bool _drv64_created = false;
 
-		__forceinline kernel_map() {
-			if (!create_drv64_dll()) return;
+		__forceinline kernel_map() noexcept {
+			if (!(_drv64_created = create_drv64_dll())) return;
 
-			_library = silent_library::load((byte_t*)::kdu::files::kdu_dll, sizeof(::kdu::files::kdu_dll));
+			_library = silent_library::load((byte_t*)kdu::files::kdu_dll, sizeof(kdu::files::kdu_dll));
 		}
 
-		__forceinline ~kernel_map() {
-			if (!initialized()) return;
+		__forceinline ~kernel_map() noexcept {
+			if (initialized()) {
+				auto library = _library;
+				_library = nullptr;
+				library->unload();
+			}
 
-			_library->unload();
-			_library = nullptr;
+			if (_drv64_created) {
+				_drv64_created = !remove_drv64_dll();
+			}
 		}
 
 		__forceinline constexpr bool initialized() const noexcept {
@@ -44,11 +48,11 @@ namespace ncore {
 		}
 
 		__forceinline bool create_drv64_dll() const noexcept {
-			return ncore::files::write_file(__drv64dllName, kdu::files::drv64_dll, sizeof(kdu::files::drv64_dll));
+			return ncore::write_file(__drv64dllName, kdu::files::drv64_dll, sizeof(kdu::files::drv64_dll));
 		}
 
 		__forceinline bool remove_drv64_dll() const noexcept {
-			return DeleteFileA(__drv64dllName);
+			return ncore::erase_file(__drv64dllName);
 		}
 
 		__forceinline nt_status_t map_driver(const address_t image, id_t provider_id) const noexcept {
@@ -88,8 +92,8 @@ namespace ncore {
 		}
 
 		static __forceinline nt_status_t map_from_file(const std::string& path, id_t vulnerability_provider = 0) {
-			byte_t* data = nullptr;
-			if (!files::read_file(path, &data)) return STATUS_FILE_NOT_AVAILABLE;
+			auto data = byte_p(nullptr);
+			if (!read_file(path, &data)) return STATUS_FILE_NOT_AVAILABLE;
 
 			return map_from_memory(data, vulnerability_provider);
 		}

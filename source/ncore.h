@@ -3,6 +3,7 @@
 #ifndef _NCORE_H
 #define _NCORE_H
 
+#include "aligned.hpp"
 #include "base_64.hpp"
 #include "config.hpp"
 #include "defines.hpp"
@@ -11,7 +12,7 @@
 #include "dynamic_array.hpp"
 #include "enumeration.hpp"
 #include "environment.hpp"
-#include "files.hpp"
+#include "file.hpp"
 #include "handle.hpp"
 #include "input.hpp"
 #include "kernel_map.hpp"

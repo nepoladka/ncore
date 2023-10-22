@@ -39,7 +39,7 @@ namespace ncore::enumeration {
 			__try {
 				if (bool(procedure(i, *elements, data, &result))) return result;
 			}
-			__except (1) {
+			__except (true) {
 				i += failure_step;
 				elements += failure_step;
 
@@ -56,28 +56,25 @@ namespace ncore::enumeration {
 			binary_procedure_t<data_t> procedure;
 		};
 		
-		static auto enumeration_procedure = [](size_t& i, byte_t& byte, enumeration_info* info) noexcept {
+		auto enumeration_procedure = [](size_t& i, byte_t& byte, enumeration_info* info) noexcept {
 			__try {
-				auto value = *(ui16_t*)&byte;
+				auto step = size_t(0);
+				auto result = info->procedure(&byte, *info->data, step);
+
+				if (step) {
+					i += step;
+				}
+
+				return result;
 			}
-			__except (1) {
+			__except (true) {
 				auto region_info = MEMORY_BASIC_INFORMATION();
-				//VirtualQuery(&byte, &region_info, sizeof(region_info));
 				NtQueryVirtualMemory(CURRENT_PROCESS_HANDLE, &byte, MEMORY_INFORMATION_CLASS::MemoryBasicInformation, &region_info, sizeof(region_info), nullptr);
 
 				i += region_info.RegionSize ? region_info.RegionSize : PAGE_SIZE;
-
-				return return_t::next;
 			}
 
-			auto step = size_t(0);
-			auto result = info->procedure(&byte, *info->data, step);
-
-			if (step) {
-				i += step;
-			}
-
-			return result;
+			return return_t::next;
 		};
 
 		auto info = enumeration_info{ &data, procedure };

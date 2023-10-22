@@ -6,11 +6,12 @@
 #include <string>
 
 namespace ncore {
-    using namespace std;
-
-    static const handle::native_handle_t::closer_t const __threadHandleCloser = handle::native_handle_t::closer_t(NtClose);
+    static const auto const __threadHandleCloser = handle::native_handle_t::closer_t(NtClose);
 
     class thread {
+    public:
+        using context_t = CONTEXT;
+
     protected:
         using handle_t = handle::native_handle_t;
         using thread_procedure_t = void(*)(void*);
@@ -75,20 +76,18 @@ namespace ncore {
         }
 
         static __forceinline thread create(address_t start, void* parameter = nullptr, handle::native_t process = nullptr, bool keep_handle = false, int priority = null, unsigned flags = null, size_t stack_size = null) noexcept {
-            if (!start) _Fail: return thread();
-            
             if (!process) {
                 process = __current_process;
             }
 
             auto handle = create_ex(process, start, parameter, flags, stack_size);
-            if (!handle) goto _Fail;
+            if (!handle) return thread();
 
             if (priority) {
                 SetThreadPriority(handle, priority);
             }
 
-            if(keep_handle) return thread(handle);
+            if (keep_handle) return thread(handle);
 
             auto id = id_t(GetThreadId(handle));
             __threadHandleCloser(handle);
@@ -140,20 +139,6 @@ namespace ncore {
             goto _Exit;
         }
 
-        __forceinline address_t start_address() const noexcept {
-            auto result = address_t(nullptr);
-
-            auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            NtQueryInformationThread(handle.get(), THREADINFOCLASS::ThreadQuerySetWin32StartAddress, &result, sizeof(address_t), null);
-
-            goto _Exit;
-        }
-
         __forceinline bool suspend() const noexcept {
             return set_suspended(true);
         }
@@ -190,6 +175,34 @@ namespace ncore {
             goto _Exit;
         }
 
+        __forceinline bool set_context(const context_t& context) const noexcept {
+            auto result = false;
+
+            auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
+            if (!handle) {
+            _Exit:
+                return result;
+            }
+
+            result = NT_SUCCESS(NtSetContextThread(handle.get(), PCONTEXT(&context)));
+
+            goto _Exit;
+        }
+
+        __forceinline bool set_start_address(address_t address = nullptr) const noexcept {
+            auto result = false;
+
+            auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
+            if (!handle) {
+            _Exit:
+                return result;
+            }
+
+            result = NT_SUCCESS(NtSetInformationThread(handle.get(), THREADINFOCLASS::ThreadQuerySetWin32StartAddress, &address, sizeof(address_t)));
+
+            goto _Exit;
+        }
+
         __forceinline int get_priority() const noexcept {
             auto result = null;
 
@@ -203,6 +216,79 @@ namespace ncore {
 
             goto _Exit;
         }
+
+        __forceinline id_t get_process() const noexcept {
+            auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION);
+            if (!handle) return null;
+
+            return GetProcessIdOfThread(handle.get());
+        }
+
+        __forceinline context_t get_context() const noexcept {
+            auto result = context_t();
+
+            auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
+            if (!handle) {
+            _Exit:
+                return result;
+            }
+
+            NtGetContextThread(handle.get(), &result);
+
+            goto _Exit;
+        }
+
+        __forceinline address_t get_start_address() const noexcept {
+            auto result = address_t(nullptr);
+
+            auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION);
+            if (!handle) {
+            _Exit:
+                return result;
+            }
+
+            NtQueryInformationThread(handle.get(), THREADINFOCLASS::ThreadQuerySetWin32StartAddress, &result, sizeof(address_t), null);
+
+            goto _Exit;
+        }
+
+        template<typename _t = address_t> __forceinline _t get_environment_address() const noexcept {
+            auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
+            if (!handle) return nullptr;
+
+            auto information = THREAD_BASIC_INFORMATION();
+            auto information_length = ULONG(sizeof(information));
+            NtQueryInformationThread(handle.get(), THREADINFOCLASS::ThreadBasicInformation, &information, information_length, &information_length);
+
+            return (_t)information.TebBaseAddress;
+        }
+
+        __forceinline TEB get_environment() const noexcept {
+            auto result = TEB();
+
+            auto environment_address = get_environment_address();
+            if (!environment_address) _Exit: return result;
+
+            auto process_id = get_process();
+            if (!process_id) goto _Exit;
+
+            auto process_handle = handle::native_t(null);
+            auto attributes = OBJECT_ATTRIBUTES();
+            auto client_id = CLIENT_ID();
+
+            client_id.UniqueThread = handle::native_t(null);
+            client_id.UniqueProcess = handle::native_t(process_id);
+            InitializeObjectAttributes(&attributes, null, null, null, null);
+
+            if (NT_ERROR(NtOpenProcess(&process_handle, PROCESS_VM_OPERATION | PROCESS_VM_READ, &attributes, &client_id))) goto _Exit;
+
+            NtReadVirtualMemory(process_handle, environment_address, &result, sizeof(result), nullptr);
+
+            NtClose(process_handle);
+
+            goto _Exit;
+        }
+
 
         static __forceinline void set_timer_resolution(ui32_t time) {
             NtSetTimerResolution(time, true, nullptr);
@@ -219,9 +305,9 @@ namespace ncore {
     
     class named_thread : public thread {
     public:
-        string name;
+        std::string name;
 
-        __forceinline named_thread(const thread& base, const string& name) : 
+        __forceinline named_thread(const thread& base, const std::string& name) :
             thread(((named_thread*)(&base))->_id, ((named_thread*)(&base))->_handle) {
             this->name = name;
         }

@@ -218,6 +218,11 @@ namespace ncore {
             return load(_path);
         }
 
+        __forceinline void clear() noexcept {
+            _map.clear();
+            _orders.clear();
+        }
+
         __forceinline bool empty() const noexcept {
             return _map.empty();
         }

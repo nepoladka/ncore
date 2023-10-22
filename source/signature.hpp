@@ -231,9 +231,9 @@ namespace ncore {
 		__forceinline signature(const char* str = nullptr) {
 			if (!str) return;
 
-			string buffer;
+			std::string buffer;
 			if (*str != ' ') {
-				buffer = string(" ") + str;
+				buffer = std::string(" ") + str;
 				str = buffer.c_str();
 			}
 

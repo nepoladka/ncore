@@ -56,19 +56,29 @@ namespace ncore::strings {
         return buffer;
     }
 
-    static __forceinline std::vector<string_t> split_string(const string_t& data, char delim) {
+    static __forceinline std::vector<string_t> split_string(const string_t& data, char separator) {
         std::vector<string_t> result;
         std::stringstream stream(data);
         string_t item;
 
-        while (std::getline(stream, item, delim)) {
+        while (std::getline(stream, item, separator)) {
             result.push_back(item);
         }
 
         return result;
     }
 
-    static __forceinline const string_t& string_to_lower(const string_t& data) {
+    static __forceinline string_t string_to_lower(const string_t& data) {
+        auto result = string_t(data);
+        if (data.empty()) _Exit: return result;
+
+        auto letter = (byte_t*)result.data();
+        do *letter = std::tolower(*letter); while (*(letter++));
+
+        goto _Exit;
+    }
+
+    static __forceinline const string_t& make_string_lower(const string_t& data) {
         if (data.empty()) _Exit: return data;
 
         auto letter = (byte_t*)data.data();

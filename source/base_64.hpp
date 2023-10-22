@@ -15,6 +15,8 @@ namespace ncore::base64 {
             '4', '5', '6', '7', '8', '9', '+', '/'
         };
 
+        if (!in) return std::string();
+
         size_t out_len = 4 * ((in_len + 2) / 3);
         std::string ret(out_len, '\0');
         auto p = (char*)(ret.c_str());
