@@ -13,8 +13,8 @@ namespace ncore {
 			return (static_array*)native;
 		}
 
-		__forceinline static_array(const _t data[_capacity] = nullptr, size_t size = _capacity) noexcept {
-			for (size_t i = 0; i < _capacity; i++) {
+		__forceinline constexpr static_array(const _t data[_capacity] = nullptr, count_t size = _capacity) noexcept {
+			for (count_t i = 0; i < _capacity; i++) {
 				_values[i] = (data && i < size) ? data[i] : _t();
 			}
 		}

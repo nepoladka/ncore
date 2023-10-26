@@ -8,8 +8,8 @@
 #include <algorithm>
 
 #define to_lower_ascii(CHAR) ((CHAR >= 'A' && CHAR <= 'Z') ? (CHAR + 32) : CHAR)
-#define u16tou8(SRC, SRCLEN, DST, DSTLEN) WideCharToMultiByte(CP_UTF8, WC_COMPOSITECHECK, SRC, SRCLEN, DST, DSTLEN, NULL, NULL)
-#define u8tou16(SRC, SRCLEN, DST, DSTLEN) MultiByteToWideChar(CP_UTF8, NULL, SRC, SRCLEN, DST, DSTLEN)
+#define u16tou8(SRC, SRCLEN, DST, DSTLEN) WideCharToMultiByte(CP_UTF8, WC_COMPOSITECHECK, (wchar_t*)(SRC), int(SRCLEN), (char*)(DST), int(DSTLEN), NULL, NULL)
+#define u8tou16(SRC, SRCLEN, DST, DSTLEN) MultiByteToWideChar(CP_UTF8, NULL, (char*)(SRC), int(SRCLEN), (wchar_t*)(DST), int(DSTLEN))
 
 namespace ncore::strings {
 	using string_t = std::string;

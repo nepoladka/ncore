@@ -16,7 +16,7 @@ namespace ncore {
 		__forceinline constexpr bool in_range(const _t& value, bool check_second = true) const noexcept {
 			auto result = false;
 
-			if (_minEquals) {
+			if constexpr (_minEquals) {
 				result = *((_t*)&value) >= min;
 			}
 			else {
@@ -24,7 +24,7 @@ namespace ncore {
 			}
 			if (!result) return false;
 
-			if (_maxEquals) {
+			if constexpr (_maxEquals) {
 				result = *((_t*)&value) <= max;
 			}
 			else {

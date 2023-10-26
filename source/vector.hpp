@@ -114,7 +114,7 @@ namespace ncore {
         }
         else
         {
-            copy_range(other.begin(), other.end(), m_data);
+            copy_range((T*)other.begin(), (T*)other.end(), m_data);
         }
     }
 
@@ -141,7 +141,7 @@ namespace ncore {
         }
         else
         {
-            copy_range(other.begin(), other.end(), m_data);
+            copy_range((T*)other.begin(), (T*)other.end(), m_data);
         }
 
         return *this;

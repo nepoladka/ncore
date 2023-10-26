@@ -280,16 +280,34 @@ namespace ncore {
 			return true;
 		}
 
-		template<typename _t> auto write_memory(offset_t offset, const _t& data) const noexcept {
+		template<typename _t> auto write(offset_t offset, const _t& data) const noexcept {
 			return write_memory(offset, sizeof(_t), &data);
 		}
 
-		__forceinline auto write(const void* data, size_t size) const noexcept {
-			return write_memory(null, size, data, create_disposion::create_force);
+		__forceinline auto write(const void* data, size_t size, bool append = false) const noexcept {
+			return write_memory(append ? get_size() : null, size, data, append ? create_disposion::open_existing : create_disposion::create_force);
 		}
 
-		__forceinline auto write(const std::vector<byte_t>& data) noexcept {
-			return write_memory(null, data.size(), data.data(), create_disposion::create_force);
+		__forceinline auto write(const std::vector<byte_t>& data, bool append = false) noexcept {
+			return write_memory(append ? get_size() : null, data.size(), data.data(), append ? create_disposion::open_existing : create_disposion::create_force);
+		}
+
+		__forceinline auto writef(const char* format, ...) noexcept {
+			va_list list;
+			va_start(list, format);
+
+			auto result = false;
+			auto size = vsnprintf(nullptr, null, format, list);
+			if (size) {
+				auto buffer = (char*)malloc(size);
+				vsnprintf(buffer, size, format, list);
+				result = write(buffer, size_t(size), true);
+				free(buffer);
+			}
+
+			va_end(list);
+
+			return result;
 		}
 
 		__forceinline bool read_memory(offset_t offset, size_t size, void* _data) const noexcept {
@@ -329,7 +347,7 @@ namespace ncore {
 			return true;
 		}
 
-		template<typename _t> auto read_memory(offset_t offset = null) const noexcept {
+		template<typename _t> auto read(offset_t offset = null) const noexcept {
 			auto result = _t();
 			read_memory(offset, sizeof(_t), &result);
 			return result;
@@ -400,12 +418,12 @@ namespace ncore {
 		return file(path).read(_result);
 	}
 
-	static __forceinline auto write_file(const std::string& path, const void* data, const size_t size) noexcept {
-		return file(path).write(data, size);
+	static __forceinline auto write_file(const std::string& path, const void* data, const size_t size, bool append = false) noexcept {
+		return file(path).write(data, size, append);
 	}
 
-	static __forceinline auto write_file(const std::string& path, const std::vector<byte_t>& data) noexcept {
-		return file(path).write(data);
+	static __forceinline auto write_file(const std::string& path, const std::vector<byte_t>& data, bool append = false) noexcept {
+		return file(path).write(data, append);
 	}
 
 	static __forceinline auto get_module_directory(address_t module) noexcept {
