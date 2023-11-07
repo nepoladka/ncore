@@ -13,11 +13,79 @@
 
 namespace ncore::strings {
 	using string_t = std::string;
-	
+    using wstring_t = std::wstring;
+
     static constexpr const char const __defaultRandomCharList[] = {
             "1234567890"
             "QWERTYUIOPASDFGHJKLZXCVBNM"
             "qwertyuiopasdfghjklzxcvbnm"
+    };
+
+    class compatible_string {
+    private:
+        string_t _u8;
+        wstring_t _u16;
+
+    public:
+        static __forceinline string_t make_u8(const wstring_t& u16) noexcept {
+            auto length = u16.length();
+            auto buffer = new char[length + 1] { null };
+
+            u16tou8(u16.c_str(), length, buffer, length);
+
+            auto result = string_t(buffer, length);
+            delete[] buffer;
+
+            return result;
+        }
+
+        static __forceinline wstring_t make_u16(const string_t& u8) noexcept {
+            auto length = u8.length();
+            auto buffer = new wchar_t[length + 1] { null };
+
+            u8tou16(u8.c_str(), length, buffer, length);
+
+            auto result = wstring_t(buffer, length);
+            delete[] buffer;
+
+            return result;
+        }
+
+    public:
+        __forceinline compatible_string() = default;
+
+        __forceinline compatible_string(const string_t& u8) noexcept {
+            _u8 = u8;
+            _u16 = make_u16(u8);
+        }
+
+        __forceinline compatible_string(const char* u8) noexcept {
+            _u8 = u8;
+            _u16 = make_u16(u8);
+        }
+
+        __forceinline compatible_string(const wstring_t& u16) noexcept {
+            _u8 = make_u8(u16);
+            _u16 = u16;
+        }
+
+        __forceinline compatible_string(const wchar_t* u16) noexcept {
+            _u8 = make_u8(u16);
+            _u16 = u16;
+        }
+
+        __forceinline compatible_string(const string_t& u8, const wstring_t& u16) noexcept {
+            _u8 = u8;
+            _u16 = u16;
+        }
+
+        __forceinline constexpr auto& string() const noexcept {
+            return _u8;
+        }
+
+        __forceinline constexpr auto& wstring() const noexcept {
+            return _u16;
+        }
     };
 
     static __forceinline void replace_strings(string_t* data, const string_t& target, const string_t& value) {
@@ -37,28 +105,21 @@ namespace ncore::strings {
         return buffer;
     }
 
-    static __forceinline string_t get_random_string(size_t length_min, size_t length_max, const char* char_list = __defaultRandomCharList, size_t char_list_size = sizeof(__defaultRandomCharList)) {
-        string_t buffer;
-
+    static __forceinline string_t get_random_string(ssize_t length_min, ssize_t length_max = 0, const char* char_list = __defaultRandomCharList, size_t char_list_size = sizeof(__defaultRandomCharList)) {
         srand(unsigned(::time(0)) * GetCurrentThreadId());
 
-        auto length = length_min;
-        if (length_max) {
-            length = rand() % (length_max - length_min - 1) + length_min;
+        auto result = string_t();
+
+        for (auto length = length_max ? ((i64_t(rand()) % i64_t(length_max - length_min - 1)) + length_min) : length_min; length > 0; length--) {
+            result += char_list[rand() % (char_list_size - 1)];
         }
 
-        buffer.reserve(length);
-
-        for (length += 1; length >= 1; length--) {
-            buffer += char_list[rand() % (char_list_size - 1)];
-        }
-
-        return buffer;
+        return result;
     }
 
     static __forceinline std::vector<string_t> split_string(const string_t& data, char separator) {
         std::vector<string_t> result;
-        std::stringstream stream(data);
+        std::stringstream stream(data.c_str());
         string_t item;
 
         while (std::getline(stream, item, separator)) {
@@ -68,14 +129,14 @@ namespace ncore::strings {
         return result;
     }
 
-    static __forceinline string_t string_to_lower(const string_t& data) {
+    static __forceinline constexpr string_t string_to_lower(const string_t& data) noexcept {
         auto result = string_t(data);
-        if (data.empty()) _Exit: return result;
 
-        auto letter = (byte_t*)result.data();
-        do *letter = std::tolower(*letter); while (*(letter++));
+        for (auto& letter : result) {
+            letter = std::tolower(letter);
+        }
 
-        goto _Exit;
+        return result;
     }
 
     static __forceinline const string_t& make_string_lower(const string_t& data) {

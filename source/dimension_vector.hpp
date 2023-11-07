@@ -13,7 +13,7 @@
                                     typedef vec##NUM<float> vec##NUM##f;                \
                                     typedef vec##NUM<long float> vec##NUM##lf;
 
-#define DEFAULT_VEC_HEADER(NUM)     struct { _t VEC_##NUM##_AXIS; }axis; _t array[NUM];                                                                 \
+#define DEFAULT_VEC_HEADER(NUM)     struct { _t VEC_##NUM##_AXIS; }; _t array[NUM];                                                                 \
                                     VEC_##NUM##_CONSTRUCTOR                                                                                             \
                                     __forceinline vec##NUM(_t array[NUM]) { for(unsigned long long i = 0; i < NUM; i++) this->array[i] = array[i]; };
 
@@ -23,24 +23,30 @@
                                     __forceinline bool operator==(const vec##NUM& right) { for(unsigned long long i=0; i< sizeof(_t) * NUM; i++) if(this->array[i] != right.array[i]) return false; return true; } \
                                     __forceinline bool operator!=(const vec##NUM& right) { return !(*this == right); }
 
-#define IMP_VEC(NUM)                DEFAULT_VEC_BEGIN(NUM) { DEFAULT_VEC_HEADER(NUM); DEFAULT_VEC_OPERATORS(NUM); VEC_##NUM##_OPERATOR(+); VEC_##NUM##_OPERATOR(-); VEC_##NUM##_OPERATOR(*); VEC_##NUM##_OPERATOR(/ ); VEC_##NUM##_OPERATOR(+= ); VEC_##NUM##_OPERATOR(-= ); VEC_##NUM##_OPERATOR(*= ); VEC_##NUM##_OPERATOR(/= ); VEC_##NUM##_BOOL_OPERATOR(>= ); VEC_##NUM##_BOOL_OPERATOR(<= ); VEC_##NUM##_BOOL_OPERATOR(> ); VEC_##NUM##_BOOL_OPERATOR(< );  }; DEFAULT_VEC_END(NUM);
+#define VEC_OPERATORS(NUM)          VEC_##NUM##_OPERATOR(+); VEC_##NUM##_OPERATOR(-); VEC_##NUM##_OPERATOR(*); VEC_##NUM##_OPERATOR(/ ); VEC_##NUM##_OPERATOR(+= ); VEC_##NUM##_OPERATOR(-= ); VEC_##NUM##_OPERATOR(*= ); VEC_##NUM##_OPERATOR(/= ); VEC_##NUM##_BOOL_OPERATOR(>= ); VEC_##NUM##_BOOL_OPERATOR(<= ); VEC_##NUM##_BOOL_OPERATOR(> ); VEC_##NUM##_BOOL_OPERATOR(< ); \
+                                    VEC_##NUM##_OPERATOR_S(+); VEC_##NUM##_OPERATOR_S(-); VEC_##NUM##_OPERATOR_S(*); VEC_##NUM##_OPERATOR_S(/ ); VEC_##NUM##_OPERATOR_S(+= ); VEC_##NUM##_OPERATOR_S(-= ); VEC_##NUM##_OPERATOR_S(*= ); VEC_##NUM##_OPERATOR_S(/= );
 
+#define IMP_VEC(NUM)                DEFAULT_VEC_BEGIN(NUM) { DEFAULT_VEC_HEADER(NUM); DEFAULT_VEC_OPERATORS(NUM); VEC_OPERATORS(NUM);  }; DEFAULT_VEC_END(NUM);
 
 #define VEC_2_AXIS                  x, y
 #define VEC_3_AXIS                  x, y, z
 #define VEC_4_AXIS                  x, y, z, w
 
-#define VEC_2_CONSTRUCTOR           __forceinline vec2(_t x = _t(), _t y = _t()) noexcept                           { axis.x = x; axis.y = y; }
-#define VEC_3_CONSTRUCTOR           __forceinline vec3(_t x = _t(), _t y = _t(), _t z = _t()) noexcept              { axis.x = x; axis.y = y; axis.z = z; }
-#define VEC_4_CONSTRUCTOR           __forceinline vec4(_t x = _t(), _t y = _t(), _t z = _t(), _t w = _t()) noexcept { axis.x = x; axis.y = y; axis.z = z; axis.w = w; }
+#define VEC_2_CONSTRUCTOR           __forceinline vec2(_t x = _t(), _t y = _t()) noexcept                           { this->x = x; this->y = y; }
+#define VEC_3_CONSTRUCTOR           __forceinline vec3(_t x = _t(), _t y = _t(), _t z = _t()) noexcept              { this->x = x; this->y = y; this->z = z; }
+#define VEC_4_CONSTRUCTOR           __forceinline vec4(_t x = _t(), _t y = _t(), _t z = _t(), _t w = _t()) noexcept { this->x = x; this->y = y; this->z = z; this->w = w; }
 
-#define VEC_2_OPERATOR(OPERAND)     __forceinline vec2 operator OPERAND (vec2 right) { return vec2(axis.x OPERAND right.axis.x, axis.y OPERAND right.axis.y); }
-#define VEC_3_OPERATOR(OPERAND)     __forceinline vec3 operator OPERAND (vec3 right) { return vec3(axis.x OPERAND right.axis.x, axis.y OPERAND right.axis.y, axis.z OPERAND right.axis.z); }
-#define VEC_4_OPERATOR(OPERAND)     __forceinline vec4 operator OPERAND (vec4 right) { return vec4(axis.x OPERAND right.axis.x, axis.y OPERAND right.axis.y, axis.z OPERAND right.axis.z, axis.w OPERAND right.axis.w); }
+#define VEC_2_OPERATOR(OPERAND)     __forceinline vec2 operator OPERAND (vec2 right) { return vec2(x OPERAND right.x, y OPERAND right.y); }
+#define VEC_3_OPERATOR(OPERAND)     __forceinline vec3 operator OPERAND (vec3 right) { return vec3(x OPERAND right.x, y OPERAND right.y, z OPERAND right.z); }
+#define VEC_4_OPERATOR(OPERAND)     __forceinline vec4 operator OPERAND (vec4 right) { return vec4(x OPERAND right.x, y OPERAND right.y, z OPERAND right.z, w OPERAND right.w); }
 
-#define VEC_2_BOOL_OPERATOR(OPERAND)    __forceinline bool operator OPERAND (vec2 right) { return axis.x OPERAND right.axis.x && axis.y OPERAND right.axis.y; }
-#define VEC_3_BOOL_OPERATOR(OPERAND)    __forceinline bool operator OPERAND (vec3 right) { return axis.x OPERAND right.axis.x && axis.y OPERAND right.axis.y && axis.z OPERAND right.axis.z; }
-#define VEC_4_BOOL_OPERATOR(OPERAND)    __forceinline bool operator OPERAND (vec4 right) { return axis.x OPERAND right.axis.x && axis.y OPERAND right.axis.y && axis.z OPERAND right.axis.z && axis.w OPERAND right.axis.w; }
+#define VEC_2_OPERATOR_S(OPERAND)     __forceinline vec2 operator OPERAND (_t right) { return vec2(x OPERAND right, y OPERAND right); }
+#define VEC_3_OPERATOR_S(OPERAND)     __forceinline vec3 operator OPERAND (_t right) { return vec3(x OPERAND right, y OPERAND right, z OPERAND right); }
+#define VEC_4_OPERATOR_S(OPERAND)     __forceinline vec4 operator OPERAND (_t right) { return vec4(x OPERAND right, y OPERAND right, z OPERAND right, w OPERAND right); }
+
+#define VEC_2_BOOL_OPERATOR(OPERAND)    __forceinline bool operator OPERAND (vec2 right) { return x OPERAND right.x && y OPERAND right.y; }
+#define VEC_3_BOOL_OPERATOR(OPERAND)    __forceinline bool operator OPERAND (vec3 right) { return x OPERAND right.x && y OPERAND right.y && z OPERAND right.z; }
+#define VEC_4_BOOL_OPERATOR(OPERAND)    __forceinline bool operator OPERAND (vec4 right) { return x OPERAND right.x && y OPERAND right.y && z OPERAND right.z && w OPERAND right.w; }
 
 #define VEC_NORMALIZE(VAL, MIN, MAX) (((VAL) - (MIN)) / ((MAX) - (MIN)))
 
@@ -48,6 +54,23 @@
 /*
 
 надо потом нормально сделать через наследование а не вот это вот всё
+
+dimvec.hpp
+namespace ncore::types {
+    template<typename _t> struct vec2 {
+        _t x, y;
+
+        __forceinline constexpr vec2(_t x, _t y) noexcept {
+            this->x = x;
+            this->y = y;
+        }
+
+        __forceinline constexpr vec2(_t arr[2]) noexcept {
+            x = arr[0];
+            y = arr[1];
+        }
+    };
+};
 
 */
 namespace ncore {

@@ -1,9 +1,11 @@
 #pragma once
+#include "defines.hpp"
 #include "aligned.hpp"
 #include "handle.hpp"
-#include "defines.hpp"
 #include "strings.hpp"
+#include "static_array.hpp"
 #include "includes/ntos.h"
+
 #include <windows.h>
 #include <shlobj.h>
 #include <vector>
@@ -16,6 +18,102 @@ namespace ncore {
 	static constexpr const lsize_t const __fileReadWriteLimit = 1024 * 1024 * 1024 * 2; //2gb
 	static constexpr const size_t const __filePathLimit = MAX_PATH;
 
+	class path {
+	public:
+		static __forceinline auto get_absolute_path(const strings::compatible_string& local) noexcept {
+			auto wstring = local.wstring();
+			auto buffer = UNICODE_STRING();
+
+			RtlDosPathNameToNtPathName_U(wstring.c_str(), &buffer, nullptr, nullptr);
+
+			auto result = strings::compatible_string(buffer.Buffer);
+
+			RtlFreeUnicodeString(&buffer);
+
+			return result;
+		}
+
+	private:
+		strings::compatible_string _value;
+
+	public:
+		__forceinline path() = default;
+
+		__forceinline path(const strings::compatible_string& value) noexcept {
+			_value = get_absolute_path(value);
+		}
+
+		__forceinline path(const std::string& value) noexcept {
+			_value = get_absolute_path(value);
+		}
+
+		__forceinline path(const char* value) noexcept {
+			_value = get_absolute_path(value);
+		}
+
+		__forceinline path(const std::wstring& value) noexcept {
+			_value = get_absolute_path(value);
+		}
+
+		__forceinline path(const wchar_t* value) noexcept {
+			_value = get_absolute_path(value);
+		}
+
+		__forceinline constexpr auto& value() const noexcept {
+			return _value;
+		}
+
+		__forceinline auto parts(strings::compatible_string* _drive = nullptr, strings::compatible_string* _folder = nullptr, strings::compatible_string* _name = nullptr, strings::compatible_string* _extension = nullptr) const noexcept {
+			auto drive = static_array<char, __filePathLimit>();
+			auto folder = static_array<char, __filePathLimit>();
+			auto name = static_array<char, __filePathLimit>();
+			auto extension = static_array<char, __filePathLimit>();
+
+			_splitpath(_value.string().c_str(), 
+				_drive ? drive.data() : nullptr, 
+				_folder ? folder.data() : nullptr, 
+				_name ? name.data() : nullptr,
+				_extension ? extension.data() : nullptr);
+
+			if (_drive) {
+				*_drive = strings::compatible_string(drive.data());
+			}
+
+			if (_folder) {
+				*_folder = strings::compatible_string(folder.data());
+			}
+
+			if (_name) {
+				*_name = strings::compatible_string(name.data());
+			}
+
+			if (_extension) {
+				*_extension = strings::compatible_string(extension.data());
+			}
+		}
+
+		__forceinline auto parts(strings::compatible_string* _directory = nullptr, strings::compatible_string* _name = nullptr) const noexcept {
+			auto drive = static_array<char, __filePathLimit>();
+			auto folder = static_array<char, __filePathLimit>();
+			auto name = static_array<char, __filePathLimit>();
+			auto extension = static_array<char, __filePathLimit>();
+
+			_splitpath(_value.string().c_str(),
+				_directory ? drive.data() : nullptr, 
+				_directory ? folder.data() : nullptr, 
+				_name ? name.data() : nullptr,
+				_name ? extension.data() : nullptr);
+
+			if (_directory) {
+				*_directory = strings::compatible_string(std::string(drive.data()) + folder.data());
+			}
+
+			if (_name) {
+				*_name = strings::compatible_string(std::string(name.data()) + extension.data());
+			}
+		}
+	};
+
 	class file {
 	public:
 		enum class create_disposion : ui32_t {
@@ -27,104 +125,9 @@ namespace ncore {
 			overwrite_or_create = FILE_OVERWRITE_IF
 		};
 
-		using ustring_t = UNICODE_STRING;
 		using status_t = IO_STATUS_BLOCK;
 
-		struct path_t : private ustring_t {
-		private:
-			bool _release;
-
-			__forceinline void take(const std::wstring& path) {
-				if (path.empty()) return;
-
-				_release = RtlDosPathNameToNtPathName_U(path.c_str(), this, null, null);
-			}
-
-			__forceinline void take(const std::string& path) {
-				if (path.empty()) return;
-
-				auto path_length = path.length() + 1;
-				auto path_buffer = (wchar_t*)malloc(path_length);
-				u8tou16(path.c_str(), lsize_t(path_length), path_buffer, lsize_t(path_length));
-
-				take(path_buffer);
-
-				return free(path_buffer);
-			}
-
-			__forceinline auto release() noexcept {
-				if (!_release) return;
-
-				if (Buffer) {
-					RtlFreeUnicodeString(this);
-				}
-
-				_release = false;
-			}
-
-		public:
-			__forceinline constexpr path_t() = default;
-
-			__forceinline path_t(const std::wstring& path) noexcept {
-				take(path);
-			}
-
-			__forceinline path_t(const wchar_t* path) noexcept {
-				if (path) {
-					take(path);
-				}
-			}
-
-			__forceinline path_t(const std::string& path) noexcept {
-				take(path);
-			}
-
-			__forceinline path_t(const char* path) noexcept {
-				if (path) {
-					take(path);
-				}
-			}
-
-			__forceinline ~path_t() noexcept {
-				release();
-			}
-
-			__forceinline auto wstring() const noexcept {
-				auto result = std::wstring();
-				if (Buffer) {
-					result = Buffer;
-				}
-				return result;
-			}
-
-			__forceinline auto string() const noexcept {
-				auto result = std::string();
-				if (Buffer) {
-					auto wstring = std::wstring(Buffer);
-					result.resize(wstring.length());
-
-					u16tou8(wstring.c_str(), lsize_t(wstring.length()), result.data(), lsize_t(result.length()));
-				}
-				return result;
-			}
-
-			__forceinline constexpr auto empty() const noexcept {
-				return !Buffer || !Length;
-			}
-
-			__forceinline auto& operator=(const path_t& path) noexcept {
-				Length = path.Length;
-				MaximumLength = path.MaximumLength;
-				Buffer = path.Buffer;
-
-				_release = path._release;
-				((path_t*)&path)->_release = false;
-
-				return *this;
-			}
-		};
-
-		static __forceinline handle::native_t __fastcall get_handle(const path_t& path, ui32_t open_access = __defaultFileOpenAccess, create_disposion disposion = create_disposion::open_existing, ui32_t share_access = __defaultFileShareAccess, ui32_t create_options = null, status_t* _status = nullptr) noexcept {
+		static __forceinline handle::native_t __fastcall get_handle(const path& path, ui32_t open_access = __defaultFileOpenAccess, create_disposion disposion = create_disposion::open_existing, ui32_t share_access = __defaultFileShareAccess, ui32_t create_options = null, status_t* _status = nullptr) noexcept {
 			static constexpr const auto __defaultFileAttributes = ui32_t(FILE_ATTRIBUTE_NORMAL);
 			static constexpr const auto __defaultCreateOptions = ui32_t(FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT);
 
@@ -136,16 +139,22 @@ namespace ncore {
 				_status = &status;
 			}
 
-			InitializeObjectAttributes(&attributes, PUNICODE_STRING(&path), OBJ_CASE_INSENSITIVE, NULL, NULL);
+			auto upath = UNICODE_STRING();
+			RtlInitUnicodeString(&upath, path.value().wstring().c_str());
 
-			return NT_SUCCESS(NtCreateFile(&result, open_access, &attributes,
-				_status, null, __defaultFileAttributes, share_access, ui32_t(disposion),
-				create_options ? __defaultCreateOptions | create_options : __defaultCreateOptions, null, null)) ?
-				result : nullptr;
+			InitializeObjectAttributes(&attributes, PUNICODE_STRING(&upath), OBJ_CASE_INSENSITIVE, NULL, NULL);
+
+			const auto status = NtCreateFile(
+				&result, open_access, &attributes, _status, null, __defaultFileAttributes, share_access, ui32_t(disposion),
+				create_options ? __defaultCreateOptions | create_options : __defaultCreateOptions, null, null);
+
+			//RtlFreeUnicodeString(&upath);
+
+			return result;
 		}
 
 		static __forceinline auto get_path(handle::native_t handle) noexcept {
-			auto result = path_t();
+			auto result = ncore::path();
 
 			if (!handle) _Exit: return result;
 
@@ -155,7 +164,7 @@ namespace ncore {
 			auto info = PFILE_NAME_INFORMATION(memset(malloc(size), null, size));
 
 			if (NT_SUCCESS(NtQueryInformationFile(handle, &status, info, size, FILE_INFORMATION_CLASS::FileNameInformation))) {
-				result = path_t(info->FileName);
+				result = ncore::path(info->FileName);
 			}
 
 			free(info);
@@ -166,9 +175,9 @@ namespace ncore {
 	private:
 		using handle_t = handle::native_handle_t;
 
-		path_t _path;
+		path _path;
 
-		static __forceinline auto __fastcall temp_handle(const path_t& path, const handle_t& source, ui32_t open_access, create_disposion disposion, ui32_t share_access = __defaultFileShareAccess, ui32_t create_options = null, status_t* _status = nullptr) noexcept {
+		static __forceinline auto __fastcall temp_handle(const path& path, const handle_t& source, ui32_t open_access, create_disposion disposion, ui32_t share_access = __defaultFileShareAccess, ui32_t create_options = null, status_t* _status = nullptr) noexcept {
 			auto result = source;
 			if (!result) {
 				(result = handle_t(get_handle(path, open_access, disposion, share_access, create_options, _status), __fileHandleCloser, false)).close_on_destroy(true);
@@ -187,7 +196,7 @@ namespace ncore {
 		}
 
 	public:
-		__forceinline __fastcall file(const path_t& path = path_t()) noexcept {
+		__forceinline __fastcall file(const path& path = ncore::path()) noexcept {
 			_path = path;
 		}
 
@@ -211,22 +220,18 @@ namespace ncore {
 			_path = get_path(handle);
 		}
 
-		static __forceinline file open(const path_t& path) noexcept {
+		static __forceinline file open(const path& path) noexcept {
 			return file(path);
 		}
 
-		static __forceinline file create(const path_t& path) noexcept {
+		static __forceinline file create(const path& path) noexcept {
 			temp_handle(path, handle_t(), SYNCHRONIZE, create_disposion::create_force);
 
 			return file(path);
 		}
 
-		__forceinline std::string path() const noexcept {
-			return _path.string();
-		}
-
-		__forceinline std::wstring wpath() const noexcept {
-			return _path.wstring();
+		__forceinline constexpr auto& path() const noexcept {
+			return _path;
 		}
 
 		__forceinline bool exists() const noexcept {
@@ -256,9 +261,10 @@ namespace ncore {
 
 			if (offset > get_size(handle.get())) return false;
 
-			static constexpr const auto write = [](const handle::native_t handle, const offset_t offset, const lsize_t size, const byte_p buffer) noexcept {
+			static constexpr const auto write = [](const handle::native_t handle, offset_t offset, const lsize_t size, const byte_p buffer) noexcept {
 				auto status = status_t();
-				return NtWriteFile(handle, nullptr, nullptr, nullptr, &status, buffer, size, PLARGE_INTEGER(&offset), nullptr);
+				auto result = NtWriteFile(handle, nullptr, nullptr, nullptr, &status, buffer, size, PLARGE_INTEGER(&offset), nullptr);
+				return result;
 			};
 
 			if (size > __fileReadWriteLimit) {
@@ -272,12 +278,11 @@ namespace ncore {
 					const auto current_offset = parts.divided * parts.count;
 					write(handle.get(), offset + current_offset, parts.divided, byte_p(data) + current_offset);
 				}
-			}
-			else {
-				write(handle.get(), offset, size, byte_p(data));
-			}
 
-			return true;
+				return true;
+			}
+			
+			return NT_SUCCESS(write(handle.get(), offset, size, byte_p(data)));
 		}
 
 		template<typename _t> auto write(offset_t offset, const _t& data) const noexcept {
@@ -317,7 +322,7 @@ namespace ncore {
 			if (!handle) return false;
 
 			auto file_size = get_size(handle.get());
-			if (file_size < size || offset > size) return false;
+			if (file_size < size || offset > file_size) return false;
 
 			if (!size) {
 				size = file_size;

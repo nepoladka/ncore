@@ -4,10 +4,19 @@
 #include "static_array.hpp"
 #include "environment.hpp"
 #include "strings.hpp"
+
 #include <tlhelp32.h>
 #include <psapi.h>
 #include <string>
 #include <vector>
+
+#ifndef NCORE_PROCESS_NO_MINIDUMP
+#include <minidumpapiset.h>
+#include <mindumpdef.h>
+#pragma comment(lib, "dbghelp.lib")
+#endif
+
+#pragma warning(disable : 4996)
 
 namespace ncore {
     static const handle::native_handle_t::closer_t const __processHandleCloser = handle::native_handle_t::closer_t(NtClose);
@@ -245,6 +254,261 @@ namespace ncore {
             }
         };
 
+#ifndef NCORE_PROCESS_NO_MINIDUMP
+        //minidump
+        class dump_t {
+        private:
+            handle::native_t _file;
+            handle::native_t _mapping;
+            address_t _data;
+
+        public:
+            struct memory_info_t {
+            private:
+                address_t _address;
+                limit<ui64_t> _virtual_bounds;
+
+            public:
+                __forceinline constexpr memory_info_t(address_t address = nullptr, ui64_t base = null, size_t size = null) noexcept {
+                    _address = address;
+                    _virtual_bounds = { base, base + size };
+                }
+
+                __forceinline constexpr auto valid() const noexcept {
+                    return _address != nullptr;
+                }
+
+                __forceinline constexpr auto address() const noexcept {
+                    return ui64_t(_virtual_bounds.min);
+                }
+
+                __forceinline constexpr auto size() const noexcept {
+                    return size_t(_virtual_bounds.max - _virtual_bounds.min);
+                }
+
+                template<typename _t = byte_t> __forceinline constexpr auto data() const noexcept {
+                    return ((_t*)_address);
+                }
+
+                __forceinline constexpr auto bounds() const noexcept {
+                    return _virtual_bounds;
+                }
+
+                template<typename _t = byte_t> __forceinline constexpr auto begin() const noexcept {
+                    return data<_t>();
+                }
+
+                template<typename _t = byte_t> __forceinline constexpr auto end() const noexcept {
+                    return ((_t*)(data<byte_t>() + size()));
+                }
+            };
+
+            struct module_info_t {
+            private:
+                std::string _name;
+
+                ui64_t _base;
+                size_t _size;
+
+            public:
+                __forceinline constexpr module_info_t(const std::string& name = std::string(), ui64_t base = null, size_t size = null) noexcept {
+                    _name = name; //strings::string_to_lower(name).c_str();
+                    _base = base;
+                    _size = size;
+                }
+
+                __forceinline constexpr auto valid() const noexcept {
+                    return _base != null;
+                }
+
+                __forceinline constexpr auto& name() const noexcept {
+                    return _name;
+                }
+
+                __forceinline constexpr auto base() const noexcept {
+                    return _base;
+                }
+
+                __forceinline constexpr auto address() const noexcept {
+                    return _base;
+                }
+
+                __forceinline constexpr auto size() const noexcept {
+                    return _size;
+                }
+            };
+
+            __forceinline dump_t(const std::string& path) noexcept {
+                _file = ncore::file::get_handle(path, FILE_READ_DATA | SYNCHRONIZE);
+                if (!_file) _Exit: return;
+
+                _mapping = CreateFileMappingA(_file, nullptr, PAGE_READONLY, null, null, nullptr);
+                if (!_mapping) {
+                _ReleaseFileAndExit:
+                    __fileHandleCloser(_file);
+                    _file = nullptr;
+
+                    goto _Exit;
+                }
+
+                _data = MapViewOfFile(_mapping, FILE_MAP_READ, null, null, null);
+                if (!_data) {
+                    __fileHandleCloser(_mapping);
+                    _mapping = nullptr;
+
+                    goto _ReleaseFileAndExit;
+                }
+            }
+
+            __forceinline ~dump_t() noexcept {
+                if (_file) {
+                    __fileHandleCloser(_file);
+                    _file = nullptr;
+                }
+
+                if (_mapping) {
+                    __fileHandleCloser(_mapping);
+                    _mapping = nullptr;
+                }
+
+                if (_data) {
+                    UnmapViewOfFile(_data);
+                    _data = nullptr;
+                }
+            }
+
+        private:
+            template<typename data_t = void> using memory_enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const index_t, const memory_info_t&, data_t*);
+            template<typename data_t = void> using module_enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const index_t, const module_info_t&, data_t*);
+
+            template<typename data_t = void> __forceinline constexpr bool enumerate_memory(memory_enumeration_procedure_t<data_t> procedure, data_t* data) const noexcept {
+                if (!_data || !procedure) return false;
+
+                auto directory = PMINIDUMP_DIRECTORY(nullptr);
+                auto list = PMINIDUMP_MEMORY64_LIST(nullptr);
+
+                if (!MiniDumpReadDumpStream(_data, MINIDUMP_STREAM_TYPE::Memory64ListStream, &directory, address_p(&list), nullptr)) return false;
+
+                for (auto i = index_t(0), j = count_t(list->NumberOfMemoryRanges), o = offset_t(list->BaseRva); i < j; i++) {
+                    auto current = list->MemoryRanges + i;
+
+                    auto info = memory_info_t(byte_p(_data) + o, current->StartOfMemoryRange, current->DataSize);
+                    if (procedure(i, info, data) == enumeration::return_t::stop) return true;
+
+                    o += current->DataSize;
+                }
+
+                return false;
+            }
+
+            //sometimes it crashed somewhere in for cycle with code 0xc0000374
+            template<typename data_t = void> __deprecated("bug: crash 0xc0000374") __forceinline constexpr bool enumerate_modules(module_enumeration_procedure_t<data_t> procedure, data_t* data) const noexcept {
+                if (!_data || !procedure) return false;
+
+                auto directory = PMINIDUMP_DIRECTORY(nullptr);
+                auto list = PMINIDUMP_MODULE_LIST(nullptr);
+
+                if (!MiniDumpReadDumpStream(_data, MINIDUMP_STREAM_TYPE::ModuleListStream, &directory, address_p(&list), nullptr)) return false;
+
+                auto result = false;
+
+                char path_buffer[0x200]{ 0 };
+                char name_buffer[0x200]{ 0 }; 
+                char extension_buffer[0x20]{ 0 };
+
+                for (auto i = index_t(0), j = count_t(list->NumberOfModules); i < j; i++) {
+                    auto current = list->Modules + i;
+                    
+                    auto path_info = PMINIDUMP_STRING(byte_p(_data) + current->ModuleNameRva); 
+                    auto path_length = path_info->Length;
+                    auto path_data = path_info->Buffer;
+
+                    u16tou8(path_data, path_length, path_buffer, path_length);
+                    _splitpath_s(path_buffer, nullptr, null, nullptr, null, name_buffer, sizeof(name_buffer), extension_buffer, sizeof(extension_buffer));
+
+                    auto path = std::string(path_buffer, path_length);
+                    auto name = std::string(name_buffer) + extension_buffer;
+                    auto info = module_info_t(name, current->BaseOfImage, current->SizeOfImage);
+                    if (result = (procedure(i, info, data) == enumeration::return_t::stop)) break;
+                }
+
+                return result;
+            }
+
+        public:
+            __forceinline constexpr auto valid() const noexcept {
+                return _data != nullptr;
+            }
+
+            __forceinline constexpr auto get_memory() const noexcept {
+                auto results = std::vector<memory_info_t>();
+
+                constexpr const auto procedure = [](const index_t, const memory_info_t& memory, decltype(results)* _results) noexcept {
+                    _results->push_back(memory);
+                    return enumeration::return_t::next;
+                    };
+
+                enumerate_memory<decltype(results)>(procedure, &results);
+
+                return results;
+            }
+
+            __forceinline constexpr auto get_memory(ui64_t address) const noexcept {
+                auto result = memory_info_t(nullptr, address);
+
+                constexpr const auto procedure = [](const index_t, const memory_info_t& memory, decltype(result)* _result) noexcept {
+                    if (memory.bounds().in_range(_result->address())) {
+                        *_result = memory;
+                        return enumeration::return_t::stop;
+                    }
+
+                    return enumeration::return_t::next;
+                };
+
+                enumerate_memory<decltype(result)>(procedure, &result);
+
+                return result;
+            }
+
+            __forceinline auto read_memory(ui64_t address, size_t size, void* _buffer) const noexcept {
+                if (!address || !size || !_buffer) return false;
+
+                auto info = get_memory(address);
+                return info.valid() ? bool(memcpy(_buffer, info.begin() + (info.address() - address), size)) : false;
+            }
+
+            __forceinline constexpr auto get_modules() const noexcept {
+                auto results = std::vector<module_info_t>();
+
+                constexpr const auto procedure = [](const index_t, const module_info_t& module, decltype(results)* _results) noexcept {
+                    _results->push_back(module);
+                    return enumeration::return_t::next;
+                };
+
+                enumerate_modules<decltype(results)>(procedure, &results);
+
+                return results;
+            }
+
+            __forceinline constexpr auto get_module(const std::string& name) const noexcept {
+                auto result = module_info_t(name);
+
+                constexpr const auto procedure = [](const index_t, const module_info_t& module, decltype(result)* _result) noexcept {
+                    if (_result->name() == module.name()) {
+                        *_result = module;
+                        return enumeration::return_t::stop;
+                    }
+
+                    return enumeration::return_t::next;
+                    };
+
+                enumerate_modules<decltype(result)>(procedure, &result);
+
+                return result;
+            }
+        };
+#endif
+
         static __forceinline handle::native_t get_handle(id_t id, unsigned access = __defaultProcessOpenAccess) {
             auto result = handle::native_t();
             auto attributes = OBJECT_ATTRIBUTES();
@@ -258,17 +522,6 @@ namespace ncore {
         }
 
     private:
-        struct string_utils {
-            static __forceinline const std::string& to_lower(const std::string& data) {
-                if (data.empty()) _Exit: return data;
-
-                auto letter = (byte_t*)data.data();
-                do *letter = byte_t(std::tolower(int(*letter))); while (*(letter++));
-
-                goto _Exit;
-            }
-        };
-
         using handle_t = handle::native_handle_t;
         using load_library_t = get_procedure_t(address_t, , const char*);
         template<typename data_t = const void*> using module_enumeration_callback_t = get_procedure_t(bool, , module_t&, data_t, address_t*);
@@ -693,10 +946,11 @@ namespace ncore {
 
         __forceinline address_t search_module(const std::string& name, module_t* _module = nullptr) const noexcept {
             static auto callback = [](module_t& module, const std::string* name, address_t* _return) noexcept {
-                return string_utils::to_lower(module.name()) == *name;
+                return strings::string_to_lower(module.name()) == *name;
             };
 
-            return enumerate_modules<const std::string*>(callback, &string_utils::to_lower(name), _module);
+            auto lower_name = strings::string_to_lower(name);
+            return enumerate_modules<const std::string*>(callback, &lower_name, _module);
         }
 
         __forceinline address_t get_address_base(address_t address, module_t* _module = nullptr) const noexcept {

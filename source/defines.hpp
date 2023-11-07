@@ -69,6 +69,10 @@ const_value(double, __m_rad, 180.0 / M_PI);
 #define __extern_export __extern __declspec(dllexport)
 #define __extern_import __extern __declspec(dllimport)
 
+#define __likely [[likely]]
+#define __unlikely [[unlikely]]
+#define __deprecated(WHY) [[deprecated(WHY)]]
+
 namespace ncore {
 	namespace types {
 		using i8_t = __int8;

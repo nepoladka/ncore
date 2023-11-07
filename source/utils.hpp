@@ -640,8 +640,8 @@ namespace ncore {
             auto scale = get_screen_scale();
 
             return vec2i32(
-                (float(rectangle.right - rectangle.left) * scale.axis.x),
-                (float(rectangle.bottom - rectangle.top) * scale.axis.y));
+                (float(rectangle.right - rectangle.left) * scale.x),
+                (float(rectangle.bottom - rectangle.top) * scale.y));
         }
 
         static __forceinline vec2i32 get_scaled_screen_size() {
@@ -649,7 +649,7 @@ namespace ncore {
         }
 
         static __forceinline size_t get_bitmap_buffer_size(vec2i32 size) {
-            return (((24 * size.axis.x + 31) & ~31) / 8) * size.axis.y;
+            return (((24 * size.x + 31) & ~31) / 8) * size.y;
         }
 
         static __forceinline size_t get_bitmap_data_size(size_t bitmap_buffer_size) {
@@ -661,7 +661,7 @@ namespace ncore {
         }
 
         static __forceinline bool save_dc_to_bitmap(HDC dc, vec2i32 size, byte_t* _buffer, size_t* _buffer_size) {
-            if (!(dc && size.axis.x && size.axis.y && _buffer_size)) return false;
+            if (!(dc && size.x && size.y && _buffer_size)) return false;
 
             auto bitmap_buffer_size = get_bitmap_buffer_size(size);
             auto buffer_size = get_bitmap_data_size(bitmap_buffer_size);
@@ -682,15 +682,15 @@ namespace ncore {
             bitmap_info_header.biBitCount = 24;
             bitmap_info_header.biCompression = BI_RGB;
             bitmap_info_header.biPlanes = 1;
-            bitmap_info_header.biWidth = size.axis.x;
-            bitmap_info_header.biHeight = size.axis.y;
+            bitmap_info_header.biWidth = size.x;
+            bitmap_info_header.biHeight = size.y;
 
             auto bitmap_buffer = address_t(nullptr);
 
             auto memory_dc = CreateCompatibleDC(dc);
             auto bitmap = CreateDIBSection(dc, &bitmap_info, DIB_RGB_COLORS, (void**)&bitmap_buffer, NULL, 0);
             SelectObject(memory_dc, bitmap);
-            BitBlt(memory_dc, 0, 0, size.axis.x, size.axis.y, dc, 0, 0, SRCCOPY);
+            BitBlt(memory_dc, 0, 0, size.x, size.y, dc, 0, 0, SRCCOPY);
 
             auto result = _buffer;
 
