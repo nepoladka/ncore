@@ -39,21 +39,26 @@ namespace ncore::zip {
 		}
 
 
-		__forceinline bool decompress(void** _result, size_t* _length) {
-			if (!(_result && _length)) _Fail: return false;
+		__forceinline bool decompress(void** _result, size_t* _length = nullptr) noexcept {
+			if (!_result) _Fail: return false;
 
 			auto raw_length = mz_ulong(this->raw_length);
 			auto length = mz_ulong(this->length);
 			if (!(length && raw_length)) goto _Fail;
 
-			auto result = (byte_t*)malloc(raw_length);
+			auto result = byte_p(malloc(raw_length));
 			if (mz_uncompress(result, &raw_length, data(), length) != MZ_OK) {
 				free(result);
 				goto _Fail;
 			}
 
-			*_result = result;
-			*_length = raw_length;
+			if (_result) {
+				*_result = result;
+			}
+
+			if (_length) {
+				*_length = raw_length;
+			}
 
 			return true;
 		}

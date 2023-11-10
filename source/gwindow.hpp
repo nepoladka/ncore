@@ -3,6 +3,9 @@
 #include "utils.hpp"
 #include "dimension_vector.hpp"
 
+#include <gl/gl.h>
+//#pragma comment(lib, "opengl32.lib")
+
 //to work with multiply threads, you need this in imconfig.h:
 //  struct ImGuiContext;
 //  extern thread_local ImGuiContext* ImGuiTLContext;
@@ -10,21 +13,18 @@
 //and this in one of your .cpp files:
 //  thread_local ImGuiContext* ImGuiTLContext;
 
-#include <gl/gl.h>
-
+#define IMGUI_DEFINE_MATH_OPERATORS
 #include "includes/gwindow/imgui/imgui.h"
 #include "includes/gwindow/imgui/imgui_internal.h"
 #include "includes/gwindow/imgui/backends/imgui_impl_win32.h"
 #include "includes/gwindow/imgui/backends/imgui_impl_opengl3.h"
 
-//#pragma comment(lib, "glfw3.lib")
-//#pragma comment(lib, "opengl32.lib")
-
 #ifdef NCORE_GWINDOW_UTILS
+#define IMGUIFILEDIALOG_NO_EXPORT
 #include "includes/gwindow/imgui/file_dialog/imgui_file_dialog.h"
 
 #ifndef NCORE_GWINDOW_DIALOGS_DELAY
-#define NCORE_GWINDOW_DIALOGS_DELAY 20 //ms
+#define NCORE_GWINDOW_DIALOGS_DELAY 10 //ms
 #endif
 #endif
 
@@ -67,6 +67,18 @@ namespace ImGui {
             ImGui::SetTooltip(buffer);
 
             return true;
+        }
+
+        static __forceinline bool IsNextItemVisible(ImGuiWindow* window = nullptr) noexcept {
+            if (!window) {
+                window = ImGui::GetCurrentWindow();
+            }
+
+            const auto scroll_pos = window->Scroll.y;
+            const auto next_item_pos = (window->DC.CursorPos - window->Pos + window->Scroll).y;
+            const auto window_height = window->Size.y;
+
+            return (next_item_pos - scroll_pos) < (window_height * 1.25f) && next_item_pos > (scroll_pos - window_height);
         }
     }
 
@@ -698,6 +710,7 @@ namespace ncore {
 #define qda_cancel { "Cancel" }
 #define qda_ok_cancel { "Ok", "Cancel" }
 #define qda_yes_no { "Yes", "No" }
+#define qda_yes_no_cancel { "Yes", "No", "Cancel" }
 
     static constexpr const auto const __dialogWindowDelay = NCORE_GWINDOW_DIALOGS_DELAY;
     
@@ -992,12 +1005,12 @@ namespace ncore {
         static void window_open_event(gwindow& window, gwindow::configuration* data) noexcept {
             auto dialog = data->callback_data<qdialog>();
 
-            if (dialog->_out.opened) {
-                *dialog->_out.opened = true;
-            }
-
             if (dialog->_open_callback) {
                 dialog->_open_callback(window, *dialog);
+            }
+
+            if (dialog->_out.opened) {
+                *dialog->_out.opened = true;
             }
 
             if (dialog->_overlap_main) {
@@ -1014,20 +1027,20 @@ namespace ncore {
                 (*dialogs_count)--;
             }
 
-            if (dialog->_close_callback) {
-                dialog->_close_callback(window, *dialog);
-            }
-
             if (dialog->_out.result) {
                 *dialog->_out.result = dialog->_answer;
             }
 
-            if (dialog->_out.opened) {
-                *dialog->_out.opened = false;
+            if (dialog->_close_callback) {
+                dialog->_close_callback(window, *dialog);
             }
 
             if (dialog->_callback_data) {
                 delete dialog->_callback_data;
+            }
+
+            if (dialog->_out.opened) {
+                *dialog->_out.opened = false;
             }
 
             return gwindow_close_event(window, data);
