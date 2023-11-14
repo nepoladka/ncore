@@ -139,16 +139,16 @@ namespace ncore::strings {
         return result;
     }
 
-    static __forceinline const string_t& make_string_lower(const string_t& data) {
+    static __forceinline const string_t& make_string_lower(string_t& data) noexcept {
         if (data.empty()) _Exit: return data;
 
-        auto letter = (byte_t*)data.data();
+        auto letter = byte_p(data.data());
         do *letter = std::tolower(*letter); while (*(letter++));
 
         goto _Exit;
     }
 
-    template<size_t _bufferSize = 512> static __forceinline string_t format_string(const char* const data, ...) {
+    template<size_t _bufferSize = 0x200> static __forceinline string_t format_string(const char* const data, ...) noexcept {
         va_list list;
         va_start(list, data);
 
@@ -158,6 +158,27 @@ namespace ncore::strings {
         va_end(list);
 
         return buffer;
+    }
+    
+    static __forceinline auto format_string(const char* const data, ...) noexcept {
+        va_list list;
+        va_start(list, data);
+
+        auto result = string_t();
+
+        auto length = vsnprintf(nullptr, null, data, list);
+        if (length) {
+            auto buffer = (char*)malloc(length += 1);
+
+            vsnprintf(buffer, length, data, list);
+            result = string_t(buffer, length - 1);
+
+            free(buffer);
+        }
+
+        va_end(list);
+
+        return result;
     }
 
     static __forceinline bool copy_string_to_clipboard(const string_t& data) {

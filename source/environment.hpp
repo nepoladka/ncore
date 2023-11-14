@@ -11,17 +11,17 @@
 
 #define __current_process HANDLE(-1)
 #define __current_thread HANDLE(-2)
-
-#define GetCurrentProcess() __current_process
-#define GetCurrentProcessId() __process_id
-
-#define GetCurrentThread() __current_thread
-#define GetCurrentThreadId() __thread_id
-
-#define GetCommandLineW() (__process_environment->ProcessParameters->CommandLine.Buffer)
-
-#define GetLastError() DWORD32(__thread_environment->LastErrorValue)
-#define SetLastError(VALUE) (__thread_environment->LastErrorValue = VALUE)
-
-#define GetLastStatus() NTSTATUS(__thread_environment->LastStatusValue)
-#define SetLastStatus(VALUE) (__thread_environment->LastStatusValue = VALUE)
+//
+//#define GetCurrentProcess() __current_process
+//#define GetCurrentProcessId() __process_id
+//
+//#define GetCurrentThread() __current_thread
+//#define GetCurrentThreadId() __thread_id
+//
+//#define GetCommandLineW() (__process_environment->ProcessParameters->CommandLine.Buffer)
+//
+//#define GetLastError() DWORD32(__thread_environment->LastErrorValue)
+//#define SetLastError(VALUE) (__thread_environment->LastErrorValue = VALUE)
+//
+//#define GetLastStatus() NTSTATUS(__thread_environment->LastStatusValue)
+//#define SetLastStatus(VALUE) (__thread_environment->LastStatusValue = VALUE)

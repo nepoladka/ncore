@@ -1,10 +1,24 @@
 #pragma once
+
+#ifdef NCORE_GWINDOW_GL_PATH
+#ifndef NCORE_GWINDOW_NO_GL_SUBINIT
+#ifndef NCORE_GWINDOW_GL_SUBINIT
+#error [when you're using custom gl path (for example - glad), you must define NCORE_GWINDOW_GL_SUBINIT and implement the gl initialization procedure, but if your gl haven't this one, you can define NCORE_GWINDOW_NO_GL_SUBINIT and it's error is gone]
+#endif
+#endif
+#else
+#define NCORE_GWINDOW_GL_PATH <gl/gl.h>
+#endif
+
+#include NCORE_GWINDOW_GL_PATH
+
+#ifdef NCORE_GWINDOW_INCLUDE_OGL_LIBRARY
+#pragma comment(lib, "opengl32.lib")
+#endif
+
 #include "thread.hpp"
 #include "utils.hpp"
 #include "dimension_vector.hpp"
-
-#include <gl/gl.h>
-//#pragma comment(lib, "opengl32.lib")
 
 //to work with multiply threads, you need this in imconfig.h:
 //  struct ImGuiContext;
@@ -19,21 +33,51 @@
 #include "includes/gwindow/imgui/backends/imgui_impl_win32.h"
 #include "includes/gwindow/imgui/backends/imgui_impl_opengl3.h"
 
-#ifdef NCORE_GWINDOW_UTILS
-#define IMGUIFILEDIALOG_NO_EXPORT
-#include "includes/gwindow/imgui/file_dialog/imgui_file_dialog.h"
-
-#ifndef NCORE_GWINDOW_DIALOGS_DELAY
-#define NCORE_GWINDOW_DIALOGS_DELAY 10 //ms
-#endif
-#endif
-
 #ifndef NCORE_GWINDOW_DEFAULT_POSITION
 #define NCORE_GWINDOW_DEFAULT_POSITION CW_USEDEFAULT, CW_USEDEFAULT
 #endif NCORE_GWINDOW_DEFAULT_POSITION
 
 #ifndef NCORE_GWINDOW_DEFAULT_ICON_NAME
 #define NCORE_GWINDOW_DEFAULT_ICON_NAME "NGLW_ICON"
+#endif
+
+#ifdef NCORE_GWINDOW_UTILS
+#define IMGUIFILEDIALOG_NO_EXPORT
+#include "includes/gwindow/imgui/file_dialog/imgui_file_dialog.h"
+
+#ifndef NCORE_GWINDOW_DIALOGS_DELAY
+#define NCORE_GWINDOW_DIALOGS_DELAY 25 //ms
+#endif
+
+#ifndef NCORE_GWINDOW_RESET_KEY
+#define NCORE_GWINDOW_RESET_KEY VK_ESCAPE
+#endif
+
+#ifndef NCORE_GWINDOW_PBAR_ANIMATION_DELAY
+#define NCORE_GWINDOW_PBAR_ANIMATION_DELAY 800 //ms
+#endif
+
+#ifndef NCORE_GWINDOW_PBAR_ANIMATION_CHAR
+#define NCORE_GWINDOW_PBAR_ANIMATION_CHAR "*"
+#endif
+
+#ifndef NCORE_GWINDOW_PBAR_ANIMATION_CHARS_COUNT
+#define NCORE_GWINDOW_PBAR_ANIMATION_CHARS_COUNT char(3)
+#endif
+
+#define qdialog_frame_parameters    ncore::gwindow& window, ncore::gwindow::gui::window_t& gui, const ncore::qdialog& dialog, const ncore::qdialog::window_inner_info& inner
+#define qdialog_window_parameters   ncore::gwindow& window, const ncore::qdialog& dialog
+#define qdialog_render_procedure()  static void render(qdialog_frame_parameters) noexcept
+#define qdialog_open_procedure()    static void open(qdialog_window_parameters) noexcept 
+#define qdialog_close_procedure()   static void close(qdialog_window_parameters) noexcept 
+#define qdialog_data(TYPE)          dialog.callback_data<TYPE>()
+
+#define qda_none            { }
+#define qda_ok              { "Ok" }
+#define qda_cancel          { "Cancel" }
+#define qda_ok_cancel       { "Ok", "Cancel" }
+#define qda_yes_no          { "Yes", "No" }
+#define qda_yes_no_cancel   { "Yes", "No", "Cancel" }
 #endif
 
 #include <mutex>
@@ -91,6 +135,15 @@ namespace ncore {
     static constexpr const auto const __defaultGuiFrameFlags = ImGuiWindowFlags(ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove);
     static constexpr const auto const __defaultIconName = NCORE_GWINDOW_DEFAULT_ICON_NAME;
 
+#ifdef NCORE_GWINDOW_UTILS
+    static constexpr const auto const __dialogWindowDelay = NCORE_GWINDOW_DIALOGS_DELAY;
+    static constexpr const auto const __pbarAnimationDelay = NCORE_GWINDOW_PBAR_ANIMATION_DELAY;
+    static constexpr const auto const __pbarAnimationChar = NCORE_GWINDOW_PBAR_ANIMATION_CHAR;
+    static constexpr const auto const __pbarAnimationCharsCount = char(NCORE_GWINDOW_PBAR_ANIMATION_CHARS_COUNT - 1);
+
+    extern ui32_t* dialogs_count; //pointer to your dialogs count value
+#endif
+
     class glwindow {
     public:
         using rect_t = RECT;
@@ -100,7 +153,7 @@ namespace ncore {
 
         struct hint_t {
             enum : byte_t {
-                resizable, top_most, hidden
+                resizable, top_most, hidden, transparent
             }name;
 
             ui64_t value;
@@ -115,6 +168,8 @@ namespace ncore {
         HDC _drawing_context;
         HGLRC _render_context;
 
+        bool _alive;
+
         handler_t _event_handler;
 
         __forceinline __fastcall glwindow(const std::string& name, handle_t handle, class_t win_class, HDC dc, HGLRC rc) noexcept {
@@ -123,6 +178,7 @@ namespace ncore {
             _class = win_class;
             _drawing_context = dc;
             _render_context = rc;
+            _alive = true;
         }
 
         static __forceinline ui32_t get_style(handle_t handle, bool ex = false) noexcept {
@@ -231,6 +287,10 @@ namespace ncore {
                     show = (hint.value == false);
                     break;
 
+                case hint_t::transparent:
+                    __debugbreak(); //todo: ...
+                    break;
+
                 default: break;
                 }
             }
@@ -264,22 +324,29 @@ namespace ncore {
 
             auto& window = *_window = glwindow(title, window_handle, window_class, drawing_context, render_context);
 
-            if (show) {
-                ShowWindowAsync(window_handle, SW_SHOW);
-            }
+#ifdef NCORE_GWINDOW_GL_SUBINIT
+            NCORE_GWINDOW_GL_SUBINIT;
+#endif
+
+            ShowWindowAsync(window_handle, SW_SHOW * show); //если вызвать ShowWindow обычную тогда почемуто отсос и сообщения не приходят
+            //UpdateWindow(window_handle); //если эту хуйню вызвать то окно нахуй больше никогда само не будет обновляться(
 
             return true;
         }
 
-        __forceinline void proceed() noexcept {
+        __forceinline void handle_events() noexcept {
             auto message = MSG();
-            while (GetMessageA(&message, _handle, null, null) > null) {
+            while (_alive) {
+                if (GetMessageA(&message, _handle, null, null) <= null) break;
+
                 TranslateMessage(&message);
                 DispatchMessageA(&message);
             }
         }
 
         __forceinline void terminate() noexcept {
+            _alive = false;
+
             __try {
                 wglMakeCurrent(null, null);
                 wglDeleteContext(_render_context);
@@ -296,6 +363,7 @@ namespace ncore {
         }
 
         __forceinline void close() noexcept {
+            _alive = false;
             SendMessageA(_handle, WM_CLOSE, null, null);
         }
 
@@ -466,6 +534,14 @@ namespace ncore {
                 PostQuitMessage(null);
                 break;
 
+#ifdef NCORE_GWINDOW_UTILS
+            case WM_KEYUP:
+                if (w == NCORE_GWINDOW_RESET_KEY) {
+                    *dialogs_count = null;
+                }
+                break;
+#endif
+
             default: break;
             }
 
@@ -521,8 +597,8 @@ namespace ncore {
             return ncore::thread();
         }
 
-        __forceinline auto proceed() noexcept {
-            return glwindow::proceed();
+        __forceinline auto handle_events() noexcept {
+            return glwindow::handle_events();
         }
 
         __forceinline auto terminate() noexcept {
@@ -586,7 +662,7 @@ namespace ncore {
 
             data->result = true;
 
-            window->proceed();
+            window->handle_events();
 
             if (info.close_callback) {
                 info.close_callback(*window, info.callback_data);
@@ -698,28 +774,11 @@ namespace ncore {
     };
 
 #ifdef NCORE_GWINDOW_UTILS
-#define qdialog_frame_parameters ncore::gwindow& window, ncore::gwindow::gui::window_t& gui, const ncore::qdialog& dialog, const ncore::qdialog::window_inner_info& inner
-#define qdialog_window_parameters ncore::gwindow& window, const ncore::qdialog& dialog
-#define qdialog_render_procedure() static void render(qdialog_frame_parameters) noexcept
-#define qdialog_open_procedure() static void open(qdialog_window_parameters) noexcept 
-#define qdialog_close_procedure() static void close(qdialog_window_parameters) noexcept 
-#define qdialog_data(TYPE) dialog.callback_data<TYPE>()
-
-#define qda_none { }
-#define qda_ok { "Ok" }
-#define qda_cancel { "Cancel" }
-#define qda_ok_cancel { "Ok", "Cancel" }
-#define qda_yes_no { "Yes", "No" }
-#define qda_yes_no_cancel { "Yes", "No", "Cancel" }
-
-    static constexpr const auto const __dialogWindowDelay = NCORE_GWINDOW_DIALOGS_DELAY;
-    
-    extern gwindow* primary_window; //pointer to your primary window (you can make it like: ncore::gwindow* ncore::primary_window = new ncore::gwindow())
-    extern ui32_t* dialogs_count; //pointer to your dialogs count value (you must proceed id by yourself like that: ImGui::BeginDisable(dialogs_count > 0))
-    extern const gwindow::gui::font_info default_font; //default font info
-    
     using gwindow_callback_t = get_procedure_t(void, , gwindow&, gwindow::configuration*);
 
+    extern gwindow* primary_window; //your primary window
+    extern const gwindow::gui::font_info default_font; //default font info
+    
     //todo:
     //static __forceinline void get_foreground_window_properties(vec2i32* _size, vec2i32* _pos) noexcept {
     //    auto foreground = GetForegroundWindow();
@@ -1216,7 +1275,7 @@ namespace ncore {
 
                 for (count_t i = 0; i < processes->size(); i++) {
                     auto& process = processes->at(i);
-                    if (process.search_module("jvm.dll")) continue;
+                    if (process.search_module("jvm.dll")) continue; //todo: make it burn them
 
                     processes->erase(processes->begin() + i);
                     i--;
@@ -1237,54 +1296,62 @@ namespace ncore {
             }
             ImGui::EndDisabled();
 
-            ImGui::BeginChild("##process_list_frame", ImVec2(), true);
-            if (processes->empty()) {
-                ImGui::CenteredText("No java processes launched!");
-            }
-            else for (auto& process : *processes) {
-                if (!process.alive()) continue;
-
-                auto process_name = process.get_name();
-
-                if (strlen(search_buffer)) {
-                    if (ncore::string_to_lower(process_name).find(ncore::string_to_lower(search_buffer)) != 0) continue;
+            if (ImGui::BeginChild("##process_list_frame", ImVec2(), true)) {
+                if (processes->empty()) {
+                    ImGui::CenteredText("No java processes launched!"); //todo: too
                 }
+                else for (auto& process : *processes) {
+                    if (!process.alive()) continue;
 
-                auto label = ncore::format_string("[%d] %s\n", process.id(), process_name.c_str());
-                if (ImGui::Selectable(label.c_str(), target ? target->id() == process.id() : false)) {
-                    if (target) {
-                        delete target;
+                    auto process_name = process.get_name();
+
+                    if (strlen(search_buffer)) {
+                        if (ncore::string_to_lower(process_name).find(ncore::string_to_lower(search_buffer)) != 0) continue;
                     }
 
-                    target = new ncore::process(process);
-                }
+                    if (!ImGui::IsNextItemVisible()) {
+                        auto font_size = ImGui::GetFont()->FontSize;
+                        ImGui::Dummy({ font_size, font_size });
+                        continue;
+                    }
 
-                if (ImGui::IsItemHovered()) {
-                    const auto path_length_limit = ((int(gui.Size.x) / 5) * 4) / int(ImGui::GetFont()->FontSize) - 3;
-
-                    auto tooltip = process.get_path();
-                    tooltip.resize(path_length_limit);
-                    tooltip += "...";
-
-                    auto process_windows = process.get_windows();
-                    if (!process_windows.empty()) {
-                        auto titles = std::string();
-
-                        for (auto window : process_windows) {
-                            auto title = window.get_title();
-                            titles += ncore::format_string("%c %#llx%s\n",
-                                window.visible() ? (window.focused() ? '*' : '+') : '-',
-                                window.handle,
-                                title.empty() ? "" : (" - [" + title + "]").c_str());
+                    auto label = ncore::format_string("[%d] %s\n", process.id(), process_name.c_str());
+                    if (ImGui::Selectable(label.c_str(), target ? target->id() == process.id() : false)) {
+                        if (target) {
+                            delete target;
                         }
 
-                        tooltip += "\n" + titles;
+                        target = new ncore::process(process);
                     }
 
-                    ImGui::SetTooltip(tooltip.c_str());
+                    if (ImGui::IsItemHovered()) {
+                        const auto path_length_limit = ((int(gui.Size.x) / 5) * 4) / int(ImGui::GetFont()->FontSize) - 3;
+
+                        auto tooltip = process.get_path();
+                        tooltip.resize(path_length_limit);
+                        tooltip += "...";
+
+                        auto process_windows = process.get_windows();
+                        if (!process_windows.empty()) {
+                            auto titles = std::string();
+
+                            for (auto window : process_windows) {
+                                auto title = window.get_title();
+                                titles += ncore::format_string("%c %#llx%s\n",
+                                    window.visible() ? (window.focused() ? '*' : '+') : '-',
+                                    window.handle,
+                                    title.empty() ? "" : (" - [" + title + "]").c_str());
+                            }
+
+                            tooltip += "\n" + titles;
+                        }
+
+                        ImGui::SetTooltip(tooltip.c_str());
+                    }
                 }
+
+                ImGui::EndChild();
             }
-            ImGui::EndChild();
         }
 
         static void frame(gwindow& window, gwindow::gui::window_t& gui, const qdialog& dialog, const qdialog::window_inner_info& inner) noexcept {
@@ -1352,14 +1419,15 @@ namespace ncore {
             }
 
             if (ImGui::BeginChild("##rshower_frame", {}, true, ImGuiWindowFlags_NoBringToFrontOnFocus)) {
-                for (index_t i = 0, j = _rows.size(); i < j; i++) {
+                for (auto i = index_t(), j = _rows.size(); i < j; i++) {
+                    if (!ImGui::IsNextItemVisible()) {
+                        auto font_size = ImGui::GetFont()->FontSize;
+                        ImGui::Dummy({ font_size, font_size });
+                        continue;
+                    }
+
                     auto& row = _rows[i];
-
                     ImGui::Selectable(row.c_str());
-
-                    const auto scroll_pos = ImGui::GetScrollY();
-                    const auto next_item_pos = ImGui::GetCursorPos();
-                    if ((next_item_pos.y - scroll_pos) >= (gui.Size.y * 1.5f)) break;
 
                     if (!ImGui::BeginPopupContextItem((row + "_" + ncore::format_string("%llx", i)).c_str())) continue;
 
@@ -1399,28 +1467,76 @@ namespace ncore {
     //progress bar
     class pbar {
     private:
-        std::string _description;
+        bool _release_description;
+        char _chars_count;
+
+        const std::string* _description;
         float* _progress;
 
+        struct {
+            ui64_t previous, current;
+        }_time;
+
         __forceinline pbar(const std::string& description, float* progress) noexcept {
+            _release_description = true;
+            _description = new std::string(description);
+            _progress = progress;
+        }
+
+        __forceinline pbar(const std::string* description, float* progress) noexcept {
+            _release_description = false;
             _description = description;
             _progress = progress;
         }
 
         void render(gwindow& window, gwindow::gui::window_t& gui, const qdialog& dialog, const qdialog::window_inner_info& inner) noexcept {
-            if (!_description.empty()) {
-                ImGui::Text(_description.c_str());
+            if (!_description->empty()) {
+                ImGui::Text(_description->c_str());
             }
 
-            ImGui::ProgressBar(*_progress);
+            auto progress = float(.5f);
+            auto text = std::string();
+
+            if (_progress) {
+                progress = *_progress;
+            }
+            else {
+                if ((_time.current = GetTickCount64()) >= (_time.previous + __pbarAnimationDelay)) {
+                    _time.previous = _time.current;
+
+                    if (_chars_count++ >= __pbarAnimationCharsCount) {
+                        _chars_count = 0;
+                    }
+                }
+
+                text = __pbarAnimationChar;
+                for (auto i = char(); i < _chars_count; i++) {
+                    text += " " + std::string(__pbarAnimationChar);
+                }
+            }
+
+            ImGui::Spacing();
+            ImGui::ProgressBar(progress, { -FLT_MIN, 0.f }, text.empty() ? nullptr : text.c_str());
         }
 
         static void frame(gwindow& window, gwindow::gui::window_t& gui, const qdialog& dialog, const qdialog::window_inner_info& inner) noexcept {
             return dialog.callback_data<pbar>()->render(window, gui, dialog, inner);
         }
 
+        static void close(gwindow& window, const qdialog& dialog) noexcept {
+            auto instance = dialog.callback_data<pbar>();
+
+            if (instance->_release_description) {
+                delete instance->_description;
+            }
+        }
+
     public:
         static __forceinline auto __fastcall open(const std::string& description, float* progress, bool* _opened = nullptr, gwindow** _window = nullptr) noexcept {
+            return qdialog::open(frame, nullptr, nullptr, new pbar(description, progress), "Progress", { 450, 125 }, { "Cancel" }, true, nullptr, _opened, _window, false, true, true, true);
+        }
+
+        static __forceinline auto __fastcall open(const std::string* description, float* progress, bool* _opened = nullptr, gwindow** _window = nullptr) noexcept {
             return qdialog::open(frame, nullptr, nullptr, new pbar(description, progress), "Progress", { 450, 125 }, { "Cancel" }, true, nullptr, _opened, _window, false, true, true, true);
         }
     };

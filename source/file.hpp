@@ -63,7 +63,7 @@ namespace ncore {
 			return _value;
 		}
 
-		__forceinline auto parts(strings::compatible_string* _drive = nullptr, strings::compatible_string* _folder = nullptr, strings::compatible_string* _name = nullptr, strings::compatible_string* _extension = nullptr) const noexcept {
+		__forceinline auto parts(strings::compatible_string* _drive, strings::compatible_string* _folder, strings::compatible_string* _name, strings::compatible_string* _extension) const noexcept {
 			auto drive = static_array<char, __filePathLimit>();
 			auto folder = static_array<char, __filePathLimit>();
 			auto name = static_array<char, __filePathLimit>();
@@ -92,7 +92,7 @@ namespace ncore {
 			}
 		}
 
-		__forceinline auto parts(strings::compatible_string* _directory = nullptr, strings::compatible_string* _name = nullptr) const noexcept {
+		__forceinline auto parts(strings::compatible_string* _directory, strings::compatible_string* _name) const noexcept {
 			auto drive = static_array<char, __filePathLimit>();
 			auto folder = static_array<char, __filePathLimit>();
 			auto name = static_array<char, __filePathLimit>();

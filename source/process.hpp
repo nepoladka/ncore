@@ -7,7 +7,6 @@
 
 #include <tlhelp32.h>
 #include <psapi.h>
-#include <string>
 #include <vector>
 
 #ifndef NCORE_PROCESS_NO_MINIDUMP
@@ -255,13 +254,7 @@ namespace ncore {
         };
 
 #ifndef NCORE_PROCESS_NO_MINIDUMP
-        //minidump
-        class dump_t {
-        private:
-            handle::native_t _file;
-            handle::native_t _mapping;
-            address_t _data;
-
+        class minidump {
         public:
             struct memory_info_t {
             private:
@@ -312,7 +305,7 @@ namespace ncore {
 
             public:
                 __forceinline constexpr module_info_t(const std::string& name = std::string(), ui64_t base = null, size_t size = null) noexcept {
-                    _name = name; //strings::string_to_lower(name).c_str();
+                    _name = strings::string_to_lower(name);
                     _base = base;
                     _size = size;
                 }
@@ -338,7 +331,16 @@ namespace ncore {
                 }
             };
 
-            __forceinline dump_t(const std::string& path) noexcept {
+            template<typename data_t = void> using module_enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const index_t, const module_info_t&, data_t*);
+            template<typename data_t = void> using memory_enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const index_t, const memory_info_t&, data_t*);
+
+        private:
+            handle::native_t _file;
+            handle::native_t _mapping;
+            address_t _data;
+
+        public:
+            __forceinline minidump(const std::string& path) noexcept {
                 _file = ncore::file::get_handle(path, FILE_READ_DATA | SYNCHRONIZE);
                 if (!_file) _Exit: return;
 
@@ -360,7 +362,7 @@ namespace ncore {
                 }
             }
 
-            __forceinline ~dump_t() noexcept {
+            __forceinline ~minidump() noexcept {
                 if (_file) {
                     __fileHandleCloser(_file);
                     _file = nullptr;
@@ -377,9 +379,30 @@ namespace ncore {
                 }
             }
 
-        private:
-            template<typename data_t = void> using memory_enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const index_t, const memory_info_t&, data_t*);
-            template<typename data_t = void> using module_enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const index_t, const module_info_t&, data_t*);
+            template<typename data_t = void> __forceinline constexpr bool enumerate_modules(module_enumeration_procedure_t<data_t> procedure, data_t* data) const noexcept {
+                if (!_data || !procedure) return false;
+
+                auto directory = PMINIDUMP_DIRECTORY(nullptr);
+                auto list = PMINIDUMP_MODULE_LIST(nullptr);
+
+                if (!MiniDumpReadDumpStream(_data, MINIDUMP_STREAM_TYPE::ModuleListStream, &directory, address_p(&list), nullptr)) return false;
+
+                auto result = false;
+
+                for (auto i = index_t(0), j = count_t(list->NumberOfModules); i < j; i++) {
+                    auto current = list->Modules + i;
+                    
+                    auto path = PMINIDUMP_STRING(byte_p(_data) + current->ModuleNameRva);
+
+                    auto name = ncore::compatible_string();
+                    ncore::path(std::wstring(path->Buffer, path->Length)).parts(nullptr, &name);
+
+                    auto info = module_info_t(name.string(), current->BaseOfImage, current->SizeOfImage);
+                    if (result = (procedure(i, info, data) == enumeration::return_t::stop)) break;
+                }
+
+                return result;
+            }
 
             template<typename data_t = void> __forceinline constexpr bool enumerate_memory(memory_enumeration_procedure_t<data_t> procedure, data_t* data) const noexcept {
                 if (!_data || !procedure) return false;
@@ -401,80 +424,8 @@ namespace ncore {
                 return false;
             }
 
-            //sometimes it crashed somewhere in for cycle with code 0xc0000374
-            template<typename data_t = void> __deprecated("bug: crash 0xc0000374") __forceinline constexpr bool enumerate_modules(module_enumeration_procedure_t<data_t> procedure, data_t* data) const noexcept {
-                if (!_data || !procedure) return false;
-
-                auto directory = PMINIDUMP_DIRECTORY(nullptr);
-                auto list = PMINIDUMP_MODULE_LIST(nullptr);
-
-                if (!MiniDumpReadDumpStream(_data, MINIDUMP_STREAM_TYPE::ModuleListStream, &directory, address_p(&list), nullptr)) return false;
-
-                auto result = false;
-
-                char path_buffer[0x200]{ 0 };
-                char name_buffer[0x200]{ 0 }; 
-                char extension_buffer[0x20]{ 0 };
-
-                for (auto i = index_t(0), j = count_t(list->NumberOfModules); i < j; i++) {
-                    auto current = list->Modules + i;
-                    
-                    auto path_info = PMINIDUMP_STRING(byte_p(_data) + current->ModuleNameRva); 
-                    auto path_length = path_info->Length;
-                    auto path_data = path_info->Buffer;
-
-                    u16tou8(path_data, path_length, path_buffer, path_length);
-                    _splitpath_s(path_buffer, nullptr, null, nullptr, null, name_buffer, sizeof(name_buffer), extension_buffer, sizeof(extension_buffer));
-
-                    auto path = std::string(path_buffer, path_length);
-                    auto name = std::string(name_buffer) + extension_buffer;
-                    auto info = module_info_t(name, current->BaseOfImage, current->SizeOfImage);
-                    if (result = (procedure(i, info, data) == enumeration::return_t::stop)) break;
-                }
-
-                return result;
-            }
-
-        public:
             __forceinline constexpr auto valid() const noexcept {
                 return _data != nullptr;
-            }
-
-            __forceinline constexpr auto get_memory() const noexcept {
-                auto results = std::vector<memory_info_t>();
-
-                constexpr const auto procedure = [](const index_t, const memory_info_t& memory, decltype(results)* _results) noexcept {
-                    _results->push_back(memory);
-                    return enumeration::return_t::next;
-                    };
-
-                enumerate_memory<decltype(results)>(procedure, &results);
-
-                return results;
-            }
-
-            __forceinline constexpr auto get_memory(ui64_t address) const noexcept {
-                auto result = memory_info_t(nullptr, address);
-
-                constexpr const auto procedure = [](const index_t, const memory_info_t& memory, decltype(result)* _result) noexcept {
-                    if (memory.bounds().in_range(_result->address())) {
-                        *_result = memory;
-                        return enumeration::return_t::stop;
-                    }
-
-                    return enumeration::return_t::next;
-                };
-
-                enumerate_memory<decltype(result)>(procedure, &result);
-
-                return result;
-            }
-
-            __forceinline auto read_memory(ui64_t address, size_t size, void* _buffer) const noexcept {
-                if (!address || !size || !_buffer) return false;
-
-                auto info = get_memory(address);
-                return info.valid() ? bool(memcpy(_buffer, info.begin() + (info.address() - address), size)) : false;
             }
 
             __forceinline constexpr auto get_modules() const noexcept {
@@ -503,6 +454,72 @@ namespace ncore {
                     };
 
                 enumerate_modules<decltype(result)>(procedure, &result);
+
+                return result;
+            }
+
+            __forceinline constexpr auto get_memory() const noexcept {
+                auto results = std::vector<memory_info_t>();
+
+                constexpr const auto procedure = [](const index_t, const memory_info_t& memory, decltype(results)* _results) noexcept {
+                    _results->push_back(memory);
+                    return enumeration::return_t::next;
+                    };
+
+                enumerate_memory<decltype(results)>(procedure, &results);
+
+                return results;
+            }
+
+            __forceinline constexpr auto get_memory(ui64_t address) const noexcept {
+                auto result = memory_info_t(nullptr, address);
+
+                constexpr const auto procedure = [](const index_t, const memory_info_t& memory, decltype(result)* _result) noexcept {
+                    if (memory.bounds().in_range(_result->address())) {
+                        *_result = memory;
+                        return enumeration::return_t::stop;
+                    }
+
+                    return enumeration::return_t::next;
+                    };
+
+                enumerate_memory<decltype(result)>(procedure, &result);
+
+                return result;
+            }
+
+            __forceinline auto read_memory(ui64_t address, size_t size, void* _buffer) const noexcept {
+                if (!address || !size || !_buffer) return false;
+
+                auto info = get_memory(address);
+                return info.valid() ? bool(memcpy(_buffer, info.begin() + (address - info.address()), size)) : false;
+            }
+
+            __forceinline auto get_command_line() const noexcept {
+                constexpr const auto __badResult = compatible_string();
+
+                auto directory = PMINIDUMP_DIRECTORY(nullptr);
+                auto list = PMINIDUMP_THREAD_LIST(nullptr);
+
+                if (!MiniDumpReadDumpStream(_data, MINIDUMP_STREAM_TYPE::ThreadListStream, &directory, address_p(&list), nullptr)) return __badResult;
+
+                auto teb = TEB();
+                if (!read_memory(list->Threads->Teb, sizeof(teb), &teb)) return __badResult;
+                
+                auto peb = PEB();
+                if (!read_memory(ui64_t(teb.ProcessEnvironmentBlock), sizeof(peb), &peb)) return __badResult;
+
+                auto parameters = RTL_USER_PROCESS_PARAMETERS();
+                if (!read_memory(ui64_t(peb.ProcessParameters), sizeof(parameters), &parameters)) return __badResult;
+
+                auto length = parameters.CommandLine.Length;
+                auto buffer = new wchar_t[parameters.CommandLine.MaximumLength] { 0 };
+
+                if (!read_memory(ui64_t(parameters.CommandLine.Buffer), length, buffer)) return __badResult;
+
+                auto result = compatible_string({ buffer, length });
+
+                delete[] buffer;
 
                 return result;
             }
@@ -651,7 +668,6 @@ namespace ncore {
             
             return process(id);
         }
-
 
         __forceinline id_t id() const noexcept {
             return _id;

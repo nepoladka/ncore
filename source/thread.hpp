@@ -3,7 +3,9 @@
 #include "handle.hpp"
 #include "static_array.hpp"
 #include "environment.hpp"
+
 #include <string>
+//#include <future>
 
 namespace ncore {
     static const auto const __threadHandleCloser = handle::native_handle_t::closer_t(NtClose);
@@ -290,16 +292,28 @@ namespace ncore {
         }
 
 
-        static __forceinline void set_timer_resolution(ui32_t time) {
+        static __forceinline void set_timer_resolution(ui32_t time) noexcept {
             NtSetTimerResolution(time, true, nullptr);
         }
 
-        static __forceinline void sleep(i32_t milisecounds) {
-            if (milisecounds < null) return;
+        static __forceinline void sleep_micro(i32_t microsecounds) noexcept {
+            if (microsecounds < null) return;
 
             auto interval = LARGE_INTEGER();
-            interval.QuadPart = -10000 * milisecounds;
+            interval.QuadPart = -10 * microsecounds;
             NtDelayExecution(false, &interval);
+        }
+
+        static __forceinline void sleep_mili(i32_t milisecounds) noexcept {
+            return sleep_micro(milisecounds * 1000);
+        }
+
+        static __forceinline void sleep(i32_t time) noexcept {
+#ifdef NCORE_THREAD_SLEEP_MICRO
+            return sleep_micro(time);
+#else
+            return sleep_mili(time);
+#endif
         }
     };
     
