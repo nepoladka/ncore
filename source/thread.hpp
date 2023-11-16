@@ -5,7 +5,11 @@
 #include "environment.hpp"
 
 #include <string>
-//#include <future>
+#include <tuple>
+
+/* available defines:
+    NCORE_THREAD_EVENT_CREATION_FAILURE
+*/
 
 namespace ncore {
     static const auto const __threadHandleCloser = handle::native_handle_t::closer_t(NtClose);
@@ -13,6 +17,30 @@ namespace ncore {
     class thread {
     public:
         using context_t = CONTEXT;
+
+        static __forceinline auto get_info(handle::native_t handle) noexcept {
+            using info_t = THREAD_BASIC_INFORMATION;
+
+            auto information = info_t();
+            if (handle) {
+                auto information_length = ULONG(sizeof(information));
+                NtQueryInformationThread(handle, THREADINFOCLASS::ThreadBasicInformation, &information, information_length, &information_length);
+            }
+
+            return information;
+        }
+
+        static __forceinline auto get_id(handle::native_t handle) noexcept {
+            return id_t(get_info(handle).ClientId.UniqueThread);
+        }
+
+        static __forceinline auto get_process(handle::native_t handle) noexcept {
+            return id_t(get_info(handle).ClientId.UniqueProcess);
+        }
+
+        static __forceinline auto get_priority(handle::native_t handle) noexcept {
+            return ui32_t(get_info(handle).BasePriority);
+        }
 
     protected:
         using handle_t = handle::native_handle_t;
@@ -53,8 +81,46 @@ namespace ncore {
 
         static __forceinline handle::native_t create_ex(handle::native_t process, address_t start, address_t parameter, unsigned flags, size_t stack_size) noexcept {
             auto handle = handle::native_t();
-            NtCreateThreadEx(&handle, THREAD_ALL_ACCESS, nullptr, process, start, parameter, flags, null, stack_size, null, nullptr);
+
+            if (!process) {
+                process = __current_process;
+            }
+
+            auto status = NtCreateThreadEx(&handle, THREAD_ALL_ACCESS, nullptr, process, start, parameter, flags, null, stack_size, null, nullptr);
+#ifdef NCORE_THREAD_EVENT_CREATION_FAILURE
+            if (NT_ERROR(status)) {
+                NCORE_THREAD_EVENT_CREATION_FAILURE;
+            }
+#endif
+
             return handle;
+        }
+
+    private:
+        struct invoke_info {
+            void* tuple;
+            void** result;
+        };
+
+        template <class result_t, class tuple_t, index_t... _indexes> static __declspec(noinline) void invoker(invoke_info* data) noexcept {
+            const std::unique_ptr<tuple_t> values((tuple_t*)data->tuple);
+            tuple_t& tuple = *values.get();
+
+            if constexpr (std::is_same<result_t, void**>::value) {
+                std::invoke(std::move(std::get<_indexes>(tuple))...);
+            }
+            else {
+                auto result = std::invoke(std::move(std::get<_indexes>(tuple))...);
+                if (data->result && *data->result) {
+                    **((decltype(result)**)(data->result)) = result;
+                }
+            }
+
+            return delete data;
+        }
+
+        template <class result_t, class tuple_t, index_t... _indexes> static __forceinline constexpr auto invoker_for(std::index_sequence<_indexes...>) noexcept {
+            return &invoker<result_t, tuple_t, _indexes...>;
         }
 
     public:
@@ -65,8 +131,16 @@ namespace ncore {
         }
 
         __forceinline thread(handle::native_t win32_handle) noexcept {
-            _id = GetThreadId(win32_handle);
+            _id = get_id(win32_handle);
             _handle = handle_t(win32_handle, __threadHandleCloser, false);
+        }
+
+        __forceinline id_t id() const noexcept {
+            return _id;
+        }
+
+        __forceinline handle::native_t handle() const noexcept {
+            return _handle.get();
         }
 
         static __forceinline thread current(unsigned open_access = THREAD_ALL_ACCESS) noexcept {
@@ -78,10 +152,6 @@ namespace ncore {
         }
 
         static __forceinline thread create(address_t start, void* parameter = nullptr, handle::native_t process = nullptr, bool keep_handle = false, int priority = null, unsigned flags = null, size_t stack_size = null) noexcept {
-            if (!process) {
-                process = __current_process;
-            }
-
             auto handle = create_ex(process, start, parameter, flags, stack_size);
             if (!handle) return thread();
 
@@ -91,18 +161,32 @@ namespace ncore {
 
             if (keep_handle) return thread(handle);
 
-            auto id = id_t(GetThreadId(handle));
+            auto id = get_id(handle);
             __threadHandleCloser(handle);
 
             return thread(id);
         }
 
-        __forceinline id_t id() const noexcept {
-            return _id;
-        }
+        template <class procedure_t, class... parameters_t> static __forceinline thread invoke(std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>** _result, procedure_t&& procedure, parameters_t&&... parameters) noexcept {
+            using tuple_t = std::tuple<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>;
 
-        __forceinline handle::native_t handle() const noexcept {
-            return _handle.get();
+            auto decay = std::make_unique<tuple_t>(std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
+            constexpr auto invoker = invoker_for<decltype(_result), tuple_t>(std::make_index_sequence<1 + sizeof...(parameters_t)>{});
+
+            auto data = new invoke_info{ decay.get(), (void**)_result };
+
+            auto handle = create_ex(nullptr, invoker, data, null, null);
+            if (!handle) {
+                delete data;
+                return thread();
+            }
+
+            decay.release();
+
+            auto id = get_id(handle);
+            __threadHandleCloser(handle);
+
+            return thread(id);
         }
 
         __forceinline void close_handle() noexcept {
@@ -205,28 +289,17 @@ namespace ncore {
             goto _Exit;
         }
 
-        __forceinline int get_priority() const noexcept {
-            auto result = null;
-
+        __forceinline auto get_priority() const noexcept {
             auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = GetThreadPriority(handle.get());
-
-            goto _Exit;
+            return get_priority(handle.get());
         }
 
-        __forceinline id_t get_process() const noexcept {
+        __forceinline auto get_process() const noexcept {
             auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION);
-            if (!handle) return null;
-
-            return GetProcessIdOfThread(handle.get());
+            return get_process(handle.get());
         }
 
-        __forceinline context_t get_context() const noexcept {
+        __forceinline auto get_context() const noexcept {
             auto result = context_t();
 
             auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
@@ -291,7 +364,6 @@ namespace ncore {
             goto _Exit;
         }
 
-
         static __forceinline void set_timer_resolution(ui32_t time) noexcept {
             NtSetTimerResolution(time, true, nullptr);
         }
@@ -314,59 +386,6 @@ namespace ncore {
 #else
             return sleep_mili(time);
 #endif
-        }
-    };
-    
-    class named_thread : public thread {
-    public:
-        std::string name;
-
-        __forceinline named_thread(const thread& base, const std::string& name) :
-            thread(((named_thread*)(&base))->_id, ((named_thread*)(&base))->_handle) {
-            this->name = name;
-        }
-    };
-
-    template <class _specificThreadInfo> class multi_thread_info {
-    public:
-        class specific_thread_info : public _specificThreadInfo {
-        public:
-            thread thread;
-        };
-
-        bool release_after_using = false;
-        size_t threads_count = null;
-        size_t alive_threads_count = null;
-        specific_thread_info* threads = null;
-
-        __forceinline multi_thread_info(bool release_after_using) {
-            this->release_after_using = release_after_using;
-        }
-
-        __forceinline void alloc(size_t threads_count) {
-            auto previous_threads = threads;
-            threads = new specific_thread_info[this->threads_count = threads_count];
-
-            if (previous_threads) return delete[] previous_threads;
-        }
-
-        __forceinline void release() {
-            if (threads) return delete[] threads;
-        }
-
-        __forceinline void abort() {
-            for (size_t i = 0; i < threads_count; i++)
-                threads[i].thread.terminate();
-        }
-
-        __forceinline void suspend() {
-            for (size_t i = 0; i < threads_count; i++)
-                threads[i].thread.suspend();
-        }
-
-        __forceinline void resume() {
-            for (size_t i = 0; i < threads_count; i++)
-                threads[i].thread.resume();
         }
     };
 }

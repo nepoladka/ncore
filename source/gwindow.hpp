@@ -962,6 +962,7 @@ namespace ncore {
             float inner_width;
             float half_width;
             float quad_width;
+
             float answers_width;
 
             float area_height;
@@ -1466,7 +1467,13 @@ namespace ncore {
 
     //progress bar
     class pbar {
+    public:
+        using abort_procedure_t = get_procedure_t(bool,, gwindow*, bool* canceling);
+
     private:
+        bool _canceling;
+        abort_procedure_t _cancel_callback;
+
         bool _release_description;
         char _chars_count;
 
@@ -1490,33 +1497,51 @@ namespace ncore {
         }
 
         void render(gwindow& window, gwindow::gui::window_t& gui, const qdialog& dialog, const qdialog::window_inner_info& inner) noexcept {
-            if (!_description->empty()) {
-                ImGui::Text(_description->c_str());
-            }
+            const auto& style = ImGui::GetStyle();
+            const auto font = ImGui::GetFont();
+            const auto inner_height = gui.Size.y - (font->FontSize + style.ItemSpacing.y + style.WindowPadding.y * 2 + style.FramePadding.y * 2);
 
-            auto progress = float(.5f);
-            auto text = std::string();
+            if (ImGui::BeginChild("##pbar_frame", { 0.f, inner_height }, false, ImGuiWindowFlags_NoBringToFrontOnFocus)) {
+                if (!_description->empty()) {
+                    ImGui::Text(_description->c_str());
+                }
 
-            if (_progress) {
-                progress = *_progress;
-            }
-            else {
-                if ((_time.current = GetTickCount64()) >= (_time.previous + __pbarAnimationDelay)) {
-                    _time.previous = _time.current;
+                auto progress = float(.5f);
+                auto text = std::string();
 
-                    if (_chars_count++ >= __pbarAnimationCharsCount) {
-                        _chars_count = 0;
+                if (_progress) {
+                    progress = *_progress;
+                }
+                else {
+                    if ((_time.current = GetTickCount64()) >= (_time.previous + __pbarAnimationDelay)) {
+                        _time.previous = _time.current;
+
+                        if (_chars_count++ >= __pbarAnimationCharsCount) {
+                            _chars_count = 0;
+                        }
+                    }
+
+                    text = __pbarAnimationChar;
+                    for (auto i = char(); i < _chars_count; i++) {
+                        text += " " + std::string(__pbarAnimationChar);
                     }
                 }
 
-                text = __pbarAnimationChar;
-                for (auto i = char(); i < _chars_count; i++) {
-                    text += " " + std::string(__pbarAnimationChar);
+                ImGui::Spacing();
+                ImGui::ProgressBar(progress, { -FLT_MIN, 0.f }, text.empty() ? nullptr : text.c_str());
+
+                ImGui::EndChild();
+            }
+
+            ImGui::BeginDisabled(!_cancel_callback || _canceling);
+
+            if (ImGui::Button(qda_cancel, { inner.inner_width, 0.f })) {
+                if (_cancel_callback) {
+                    ncore::async(_cancel_callback, &window, &(_canceling = true));
                 }
             }
 
-            ImGui::Spacing();
-            ImGui::ProgressBar(progress, { -FLT_MIN, 0.f }, text.empty() ? nullptr : text.c_str());
+            ImGui::EndDisabled();
         }
 
         static void frame(gwindow& window, gwindow::gui::window_t& gui, const qdialog& dialog, const qdialog::window_inner_info& inner) noexcept {
@@ -1532,12 +1557,12 @@ namespace ncore {
         }
 
     public:
-        static __forceinline auto __fastcall open(const std::string& description, float* progress, bool* _opened = nullptr, gwindow** _window = nullptr) noexcept {
-            return qdialog::open(frame, nullptr, nullptr, new pbar(description, progress), "Progress", { 450, 125 }, { "Cancel" }, true, nullptr, _opened, _window, false, true, true, true);
+        static __forceinline auto __fastcall open(const std::string& description, float* progress, abort_procedure_t cancel_callback = nullptr, bool* _opened = nullptr, gwindow** _window = nullptr) noexcept {
+            return qdialog::open(frame, nullptr, nullptr, new pbar(description, progress), "Progress", { 450, 125 }, {  }, true, nullptr, _opened, _window, false, true, false, true);
         }
 
-        static __forceinline auto __fastcall open(const std::string* description, float* progress, bool* _opened = nullptr, gwindow** _window = nullptr) noexcept {
-            return qdialog::open(frame, nullptr, nullptr, new pbar(description, progress), "Progress", { 450, 125 }, { "Cancel" }, true, nullptr, _opened, _window, false, true, true, true);
+        static __forceinline auto __fastcall open(const std::string* description, float* progress, abort_procedure_t cancel_callback = nullptr, bool* _opened = nullptr, gwindow** _window = nullptr) noexcept {
+            return qdialog::open(frame, nullptr, nullptr, new pbar(description, progress), "Progress", { 450, 125 }, {  }, true, nullptr, _opened, _window, false, true, false, true);
         }
     };
 #endif

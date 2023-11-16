@@ -18,15 +18,9 @@ namespace ncore {
     namespace utils {
         using namespace strings;
 
-        struct reading_thread_info {
-            address_t progress;
-        };
-
         struct system_version {
             ui32_t major, minor, build;
         };
-
-        using reading_info = multi_thread_info<reading_thread_info>;
 
         static __forceinline address_t manual_map_library(handle::native_t process, byte_t* file, size_t size, unsigned fdwReason = DLL_PROCESS_ATTACH, address_t lpReserved = NULL, bool clearHeader = true, bool clearNonNeededSections = true, bool adjustProtections = true, bool sehExceptionSupport = true) {
             using f_LoadLibraryA = HINSTANCE(WINAPI*)(const char* lpLibFilename);
@@ -386,9 +380,52 @@ namespace ncore {
             return true;
         }
 
-        static __forceinline byte_t* dump_process_memory(handle::native_t process, address_t address, size_t size, byte_t* buffer = nullptr, int threads_count = 1, int threads_priority = THREAD_PRIORITY_HIGHEST, reading_info* _info = nullptr) {
+        static __forceinline byte_t* dump_process_memory(handle::native_t process, address_t address, size_t size, byte_t* buffer = nullptr, int threads_count = 1, int threads_priority = THREAD_PRIORITY_HIGHEST/*, reading_info* _info = nullptr*/) {
+            struct reading_thread_info {
+            public:
+                struct specific_thread_info {
+                    address_t progress;
+                    thread thread;
+                };
+
+                bool release_after_using = false;
+                size_t threads_count = null;
+                size_t alive_threads_count = null;
+                specific_thread_info* threads = null;
+
+                __forceinline reading_thread_info(bool release_after_using) {
+                    this->release_after_using = release_after_using;
+                }
+
+                __forceinline void alloc(size_t threads_count) {
+                    auto previous_threads = threads;
+                    threads = new specific_thread_info[this->threads_count = threads_count];
+
+                    if (previous_threads) return delete[] previous_threads;
+                }
+
+                __forceinline void release() {
+                    if (threads) return delete[] threads;
+                }
+
+                __forceinline void abort() {
+                    for (size_t i = 0; i < threads_count; i++)
+                        threads[i].thread.terminate();
+                }
+
+                __forceinline void suspend() {
+                    for (size_t i = 0; i < threads_count; i++)
+                        threads[i].thread.suspend();
+                }
+
+                __forceinline void resume() {
+                    for (size_t i = 0; i < threads_count; i++)
+                        threads[i].thread.resume();
+                }
+            };
+            
             struct reading_arguments {
-                reading_info::specific_thread_info* info;
+                reading_thread_info::specific_thread_info* info;
 
                 handle::native_t process;
                 address_t start_address;
@@ -445,14 +482,16 @@ namespace ncore {
                 buffer = (byte_t*)malloc(size);
             }
 
-            if (!_info) {
-                auto info_buffer = reading_info(true);
+            /*if (!_info) {
+                auto info_buffer = reading_thread_info(true);
 
                 _info = &info_buffer;
-            }
+            }*/
+
+            auto info_buffer = reading_thread_info(true);
+            auto _info = &info_buffer;
 
             _info->alloc(threads_count);
-
 
             auto size_per_thread = (size / threads_count);
 

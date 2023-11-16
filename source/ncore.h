@@ -26,6 +26,7 @@
 #include "static_array.hpp"
 #include "status.hpp"
 #include "strings.hpp"
+#include "task.hpp"
 #include "thread.hpp"
 #include "time.hpp"
 #include "utils.hpp"
