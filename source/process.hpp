@@ -1,8 +1,7 @@
 #pragma once
-#include "defines.hpp"
-#include "handle.hpp"
+#include "thread.hpp"
 #include "static_array.hpp"
-#include "environment.hpp"
+#include "enumeration.hpp"
 #include "strings.hpp"
 
 #include <tlhelp32.h>
@@ -27,7 +26,84 @@ namespace ncore {
     template<unsigned _bufferSize = 1024> static __forceinline std::vector<process> get_processes(unsigned open_access = __defaultProcessOpenAccess);
 
     class process {
+    private:
+        using handle_t = handle::native_handle_t;
+        using load_library_t = get_procedure_t(address_t, , const char*);
+
     public:
+        struct memory_t : private MEMORY_BASIC_INFORMATION {
+        public:
+            using base_t = MEMORY_BASIC_INFORMATION;
+
+            __forceinline memory_t() = default;
+
+            __forceinline memory_t(const base_t& info) noexcept : base_t(info) {
+                return;
+            }
+
+            __forceinline constexpr const auto& base() const noexcept {
+                return *((base_t*)this);
+            }
+
+            __forceinline constexpr auto& base() noexcept {
+                return *((base_t*)this);
+            }
+
+            __forceinline constexpr auto region() const noexcept {
+                return address_t(this->AllocationBase);
+            }
+
+            __forceinline constexpr auto address() const noexcept {
+                return address_t(this->BaseAddress);
+            }
+
+            __forceinline constexpr auto size() const noexcept {
+                return size_t(this->RegionSize);
+            }
+        };
+
+        struct region_t : private MEMORY_REGION_INFORMATION {
+        private:
+            std::vector<memory_t> _allocations;
+
+        public:
+            using base_t = MEMORY_REGION_INFORMATION;
+
+            __forceinline region_t() = default;
+
+            __forceinline region_t(const base_t& info, const decltype(_allocations)& memory = {}) noexcept : base_t(info), _allocations(memory) {
+                return;
+            }
+
+            __forceinline constexpr const auto& base() const noexcept {
+                return *((base_t*)this);
+            }
+
+            __forceinline constexpr auto& base() noexcept {
+                return *((base_t*)this);
+            }
+
+            __forceinline constexpr auto address() const noexcept {
+                return address_t(this->AllocationBase);
+            }
+
+            __forceinline constexpr auto size() const noexcept {
+                return size_t(this->RegionSize);
+            }
+
+            __forceinline constexpr auto bounds() const noexcept {
+                return limit<address_t, true, false>(address(), address_t(ui64_t(address()) + size()));
+            }
+
+            __forceinline constexpr const auto& memory() const noexcept {
+                return _allocations;
+            }
+
+            __forceinline constexpr auto& memory() noexcept {
+                return _allocations;
+            }
+        };
+
         class window_t { //todo: move it to single file and do other functions like get_size(), get_position(), capture(), etc.
         public:
             using handle_t = HWND;
@@ -488,7 +564,7 @@ namespace ncore {
                 return result;
             }
 
-            __forceinline auto read_memory(ui64_t address, size_t size, void* _buffer) const noexcept {
+            __forceinline constexpr auto read_memory(ui64_t address, size_t size, void* _buffer) const noexcept {
                 if (!address || !size || !_buffer) return false;
 
                 auto info = get_memory(address);
@@ -539,9 +615,8 @@ namespace ncore {
         }
 
     private:
-        using handle_t = handle::native_handle_t;
-        using load_library_t = get_procedure_t(address_t, , const char*);
         template<typename data_t = const void*> using module_enumeration_callback_t = get_procedure_t(bool, , module_t&, data_t, address_t*);
+        template<typename data_t = const void*> using memory_enumeration_callback_t = get_procedure_t(bool, , handle_t&, memory_t&, data_t, address_t*);
 
         id_t _id;
         handle_t _handle;
@@ -608,6 +683,31 @@ namespace ncore {
 
                 return result;
             } while (head != current);
+
+            return nullptr;
+        }
+
+        template<typename data_t = const void*> __forceinline address_t enumerate_memory(memory_enumeration_callback_t<data_t> callback, data_t data, memory_t* _memory = nullptr) const noexcept {
+            auto current = address_t();
+            auto handle = temp_handle(_id, _handle, PROCESS_QUERY_INFORMATION);
+            if (!handle) return nullptr;
+
+            do {
+                auto memory = memory_t();
+                if (NT_ERROR(NtQueryVirtualMemory(handle.get(), current, MEMORY_INFORMATION_CLASS::MemoryBasicInformation, &memory, sizeof(memory_t::base_t), nullptr))) break;
+
+                auto result = current;
+                if (!callback(handle, memory, data, &result)) {
+                    *ui64_p(&current) += memory.size() ? memory.size() : PAGE_SIZE;
+                    continue;
+                }
+
+                if (_memory) {
+                    *_memory = memory;
+                }
+
+                return result;
+            } while (true);
 
             return nullptr;
         }
@@ -914,6 +1014,23 @@ namespace ncore {
             return result;
         }
 
+        __forceinline auto search_module(const std::string& name, module_t* _module = nullptr) const noexcept {
+            static auto callback = [](module_t& module, const std::string* name, address_t* _return) noexcept {
+                return strings::string_to_lower(module.name()) == *name;
+                };
+
+            auto lower_name = strings::string_to_lower(name);
+            return enumerate_modules<const std::string*>(callback, &lower_name, _module);
+        }
+
+        __forceinline auto get_address_base(address_t address, module_t* _module = nullptr) const noexcept {
+            static auto callback = [](module_t& module, ui64_t address, address_t* _return) noexcept {
+                return address >= module.address<ui64_t>() && address <= (module.address<ui64_t>() + module.size());
+                };
+
+            return enumerate_modules<ui64_t>(callback, ui64_t(address), _module);
+        }
+
         __forceinline auto get_exports(const std::string& module_name, module_t* _module = nullptr) const noexcept {
             auto result = std::vector<module_t::export_t>();
 
@@ -960,48 +1077,46 @@ namespace ncore {
             return info.results;
         }
 
-        __forceinline address_t search_module(const std::string& name, module_t* _module = nullptr) const noexcept {
-            static auto callback = [](module_t& module, const std::string* name, address_t* _return) noexcept {
-                return strings::string_to_lower(module.name()) == *name;
-            };
+        __forceinline auto get_regions() const noexcept {
+            auto results = std::vector<region_t>();
+            constexpr const auto callback = [](handle_t& handle, memory_t& info, decltype(results)* _results, address_t*) noexcept {
+                auto region = region_t();
+                auto status = NtQueryVirtualMemory(handle.get(), info.region(), MEMORY_INFORMATION_CLASS::MemoryRegionInformation, &region, sizeof(region_t::base_t), nullptr);
+                if (NT_SUCCESS(status)) {
+                    for (auto& exists : *_results) {
+                        if (exists.address() != region.address()) continue;
 
-            auto lower_name = strings::string_to_lower(name);
-            return enumerate_modules<const std::string*>(callback, &lower_name, _module);
-        }
+                        exists.memory().push_back(info);
+                        return false;
+                    }
 
-        __forceinline address_t get_address_base(address_t address, module_t* _module = nullptr) const noexcept {
-            static auto callback = [](module_t& module, ui64_t address, address_t* _return) noexcept {
-                return address >= module.address<ui64_t>() && address <= (module.address<ui64_t>() + module.size());
-            };
-
-            return enumerate_modules<ui64_t>(callback, ui64_t(address), _module);
-        }
-
-        __forceinline bool load_library(const std::string& file) noexcept {
-            auto result = false;
-            if (file.empty()) _Exit: return result;
-
-            if (_id == GetCurrentProcessId()) return LoadLibraryA(file.c_str());
-
-            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
-            if (!handle) goto _Exit;
-
-            auto memory = address_t(nullptr);
-            auto size = file.length();
-            if (NT_ERROR(NtAllocateVirtualMemory(handle.get(), &memory, null, &size, MEM_COMMIT, PAGE_READWRITE))) goto _Exit;
-
-            if (result = NT_SUCCESS(NtWriteVirtualMemory(handle.get(), memory, address_t(file.c_str()), file.length(), nullptr))) {
-                auto library_loading_procedure = load_library_t(search_exports("LoadLibraryA", 1).front().address);
-
-                if (library_loading_procedure) {
-                    auto thread = CreateRemoteThread(handle.get(), nullptr, null, LPTHREAD_START_ROUTINE(library_loading_procedure), memory, null, nullptr);
-                    WaitForSingleObject(thread, INFINITE);
+                    region.memory().push_back(info);
+                    _results->push_back(region);
                 }
+
+                return false;
+            };
+
+            enumerate_memory<decltype(results)*>(callback, &results);
+
+            return results;
+        }
+
+        __forceinline auto get_address_region(address_t address, region_t* _region = nullptr) const noexcept {
+            if (!address) return address_t(nullptr);
+            
+            auto regions = get_regions();
+            for (auto& region : regions) {
+                if (!region.bounds().in_range(address)) continue;
+
+                if (_region) {
+                    *_region = region;
+                }
+
+                return region.address();
             }
 
-            NtFreeVirtualMemory(handle.get(), &memory, &size, MEM_DECOMMIT);
-
-            goto _Exit;
+            return address_t(nullptr);
         }
 
         __forceinline address_t allocate_memory(size_t size = PAGE_SIZE, ui32_t protection = PAGE_EXECUTE_READWRITE, address_t address = nullptr) noexcept {
@@ -1118,10 +1233,35 @@ namespace ncore {
 
             return true;
         }
+
+        __forceinline thread create_thread(address_t start, void* parameter = nullptr, bool keep_handle = false, int priority = null, unsigned flags = null, size_t stack_size = null) noexcept {
+            return thread::create(start, parameter, temp_handle(_id, _handle, PROCESS_ALL_ACCESS).get(), keep_handle, priority, flags, stack_size);
+        }
+
+        __forceinline address_t load_library(const std::string& file) noexcept {
+            if (file.empty()) _Fail: return nullptr;
+
+            if (_id == __process_id) return LoadLibraryA(file.c_str());
+
+            auto address = allocate_memory(file.length(), PAGE_READWRITE);
+            if (!address) goto _Fail;
+
+            auto result = address_t();
+
+            if (write_memory(address, file.c_str(), file.length())) {
+                if (auto procedure = load_library_t(search_exports("LoadLibraryA", 1).front().address)) {
+                    create_thread(procedure, address).wait();
+                    result = search_module(path(file).name().string());
+                }
+            }
+
+            release_memory(address);
+
+            return result;
+        }
     };
 
-    template<unsigned _bufferSize> static __forceinline std::vector<process> get_processes(unsigned open_access)
-    {
+    template<unsigned _bufferSize> static __forceinline std::vector<process> get_processes(unsigned open_access) {
         std::vector<process> results;
 
         id_t buffer[_bufferSize] = { null };
@@ -1141,5 +1281,4 @@ namespace ncore {
 
         goto _Exit;
     }
-
 }

@@ -1,6 +1,5 @@
 #pragma once
 #include "defines.hpp"
-#include "aligned.hpp"
 #include "handle.hpp"
 #include "strings.hpp"
 #include "static_array.hpp"
@@ -111,6 +110,12 @@ namespace ncore {
 			if (_name) {
 				*_name = strings::compatible_string(std::string(name.data()) + extension.data());
 			}
+		}
+
+		__forceinline auto name() const noexcept {
+			auto result = strings::compatible_string();
+			parts(nullptr, &result);
+			return result;
 		}
 	};
 

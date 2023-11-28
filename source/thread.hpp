@@ -4,6 +4,7 @@
 #include "static_array.hpp"
 #include "environment.hpp"
 
+#include <memory>
 #include <string>
 #include <tuple>
 
@@ -97,22 +98,27 @@ namespace ncore {
         }
 
     private:
-        struct invoke_info {
-            void* tuple;
-            void** result;
+        template<class result_t, class tuple_t> struct invoke_info {
+            result_t* result;
+            tuple_t* tuple;
+
+            __forceinline constexpr invoke_info(result_t* result, tuple_t* tuple) noexcept {
+                invoke_info::result = result;
+                invoke_info::tuple = tuple;
+            }
         };
 
-        template <class result_t, class tuple_t, index_t... _indexes> static __declspec(noinline) void invoker(invoke_info* data) noexcept {
-            const std::unique_ptr<tuple_t> values((tuple_t*)data->tuple);
+        template <class result_t, class tuple_t, index_t... _indexes> static __declspec(noinline) void invoker(invoke_info<result_t, tuple_t>* data) noexcept {
+            const std::unique_ptr<tuple_t> values(data->tuple);
             tuple_t& tuple = *values.get();
 
-            if constexpr (std::is_same<result_t, void**>::value) {
+            if constexpr (std::is_same<result_t, void>::value) {
                 std::invoke(std::move(std::get<_indexes>(tuple))...);
             }
             else {
                 auto result = std::invoke(std::move(std::get<_indexes>(tuple))...);
-                if (data->result && *data->result) {
-                    **((decltype(result)**)(data->result)) = result;
+                if (data->result) {
+                    *data->result = result;
                 }
             }
 
@@ -167,13 +173,14 @@ namespace ncore {
             return thread(id);
         }
 
-        template <class procedure_t, class... parameters_t> static __forceinline thread invoke(std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>** _result, procedure_t&& procedure, parameters_t&&... parameters) noexcept {
+        template <class procedure_t, class... parameters_t> static __forceinline thread invoke(std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>* _result, procedure_t&& procedure, parameters_t&&... parameters) noexcept {
+            using result_t = std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>;
             using tuple_t = std::tuple<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>;
 
             auto decay = std::make_unique<tuple_t>(std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
-            constexpr auto invoker = invoker_for<decltype(_result), tuple_t>(std::make_index_sequence<1 + sizeof...(parameters_t)>{});
+            constexpr auto invoker = invoker_for<result_t, tuple_t>(std::make_index_sequence<1 + sizeof...(parameters_t)>{});
 
-            auto data = new invoke_info{ decay.get(), (void**)_result };
+            auto data = new invoke_info<result_t, tuple_t>(_result, decay.get());
 
             auto handle = create_ex(nullptr, invoker, data, null, null);
             if (!handle) {
@@ -193,7 +200,7 @@ namespace ncore {
             return _handle.close();
         }
 
-        __forceinline unsigned wait(unsigned milisecounds_timeout = INFINITE) const noexcept {
+        __forceinline ui32_t wait(ui32_t milisecounds_timeout = INFINITE) const noexcept {
             auto result = 0ui32;
 
             auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);

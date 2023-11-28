@@ -13,6 +13,14 @@ extern"C" void* _ReturnAddress(void);
 #endif
 
 #define null (0)
+#define NULL (0)
+
+#define __b(NUM) size_t(NUM)
+#define __kb(NUM) size_t(__b(1024) * NUM)
+#define __mb(NUM) size_t(__kb(1024) * NUM)
+#define __gb(NUM) size_t(__mb(1024) * NUM)
+#define __tb(NUM) size_t(__gb(1024) * NUM)
+#define __pb(NUM) size_t(__tb(1024) * NUM)
 
 #ifndef ncore_procedure
 #define ncore_procedure(TYPE) __forceinline TYPE __fastcall
@@ -30,12 +38,24 @@ const_value(double, __m_rad, 180.0 / M_PI);
 #define M_RAD (__m_rad)
 #endif
 
-#ifndef max
-#define max(a,b) (((a) > (b)) ? (a) : (b))
+#ifndef __max
+#define __max(A, B) (((A) > (B)) ? (A) : (B))
 #endif
 
-#ifndef min
-#define min(a,b) (((a) < (b)) ? (a) : (b))
+#ifndef __min
+#define __min(A, B) (((A) < (B)) ? (A) : (B))
+#endif
+
+#ifndef __minmax
+#define __minmax(MIN, VAL, MAX) __max(__min(VAL, MAX), MIN)
+#endif
+
+#ifndef __normalize
+#define __normalize(MIN, VAL, MAX) (((VAL) - (MIN)) / ((MAX) - (MIN)))
+#endif
+
+#ifndef __absolute
+#define __absolute(VAL) (((VAL) >= NULL) ? (VAL) : (-VAL))
 #endif
 
 #define align_up(VALUE, ALIGNMENT) (((VALUE) + (ALIGNMENT) - 1) & ~((ALIGNMENT) - 1))
@@ -71,52 +91,8 @@ const_value(double, __m_rad, 180.0 / M_PI);
 
 #define __likely [[likely]]
 #define __unlikely [[unlikely]]
-#define __deprecated(WHY) [[deprecated(WHY)]]
 
-namespace ncore {
-	namespace types {
-		using i8_t = __int8;
-		using i16_t = __int16;
-		using i32_t = __int32;
-		using i64_t = __int64;
+#define __forcedeprec(WHY) [[deprecated(WHY)]]
+#define __deprecated __forcedeprec
 
-		using ui8_t = unsigned __int8;
-		using ui16_t = unsigned __int16;
-		using ui32_t = unsigned __int32;
-		using ui64_t = unsigned __int64;
-
-		using ui8_p = ui8_t*;
-		using ui16_p = ui16_t*;
-		using ui32_p = ui32_t*;
-		using ui64_p = ui64_t*;
-
-		using sbyte_t = i8_t;
-		using sbyte_p = sbyte_t*;
-
-		using byte_t = ui8_t;
-		using byte_p = byte_t*;
-
-		using lssize_t = i32_t;
-		using lsize_t = ui32_t;
-
-		using ssize_t = i64_t;
-		using ssize_p = ssize_t*;
-
-		using size_t = ui64_t;
-		using size_p = size_t*;
-
-		using scount_t = i64_t;
-		using count_t = ui64_t;
-
-		using sindex_t = i64_t;
-		using index_t = ui64_t;
-
-		using soffset_t = i64_t;
-		using offset_t = ui64_t;
-
-		using address_t = void*;
-		using address_p = address_t*;
-	}
-
-	using namespace types;
-}
+#include "types.hpp"

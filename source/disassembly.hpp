@@ -1,7 +1,9 @@
 #pragma once
 #include "defines.hpp"
 #include "enumeration.hpp"
+
 #include <vector>
+#include <string>
 
 #ifndef BEA_ENGINE_STATIC
 #define BEA_ENGINE_STATIC
@@ -12,11 +14,16 @@
 #endif
 
 #include "includes/beaengine/beaengine.h"
-#pragma comment(lib, "beaengine.lib")
 
-namespace ncore::disassembled {
+#ifdef NCORE_DISASSEMBLY_INCLUDE_BEA_LIBRARY
+#pragma comment(lib, "beaengine.lib")
+#endif
+
+namespace ncore::disassembly {
 	begin_unaligned struct instruction {
 	public:
+		using collection = std::vector<instruction>;
+
 		ui64_t eip, offset;
 		ui32_t security_block;
 		char complete_instruction[INSTRUCT_LENGTH];
@@ -76,25 +83,23 @@ namespace ncore::disassembled {
 		}
 	} end_unaligned;
 
-	using base_t = std::vector<instruction>;
-
-	class code : private base_t {
+	class code : private instruction::collection {
 	public:
 		struct info_t {
 			std::string name;
 			std::vector<instruction> references;
 		};
 
-		template<typename data_t = void*> using enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const size_t index, const instruction& instruction, data_t data);
-		using bytes_getting_procedure_t = get_procedure_t(bool, , address_t address, byte_t** buffer, size_t size);
-		using bytes_releasing_procedure_t = get_procedure_t(bool, , byte_t** buffer, size_t size);
+		template<typename data_t = void*> using enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const index_t index, const instruction& instruction, data_t data);
+		using bytes_getting_procedure_t = get_procedure_t(bool, , address_t address, byte_p* buffer, size_t size);
+		using bytes_releasing_procedure_t = get_procedure_t(bool, , byte_p* buffer, size_t size);
 
 		address_t address;
 
 		__forceinline code(const byte_p code, size_t length, address_t address = nullptr, bool save_bytes = false) noexcept {
 			this->address = address = (address ? address : address_t(code));
 
-			auto instruction = disassembled::instruction();
+			auto instruction = disassembly::instruction();
 			instruction.architecture = 64;
 			instruction.eip = ui64_t(code);
 
@@ -106,7 +111,7 @@ namespace ncore::disassembled {
 					instruction.save_bytes(code + instruction.offset);
 
 				instruction.address = address_t(ui64_t(address) + instruction.offset);
-				base_t::push_back(instruction);
+				instruction::collection::push_back(instruction);
 
 				instruction.eip += instruction.length;
 				instruction.offset += instruction.length;
@@ -122,7 +127,7 @@ namespace ncore::disassembled {
 		}
 
 		__forceinline constexpr const size_t size() const noexcept {
-			return base_t::size();
+			return instruction::collection::size();
 		}
 
 		__forceinline std::string readable(const std::string& separator = "\n") const noexcept {
@@ -135,28 +140,28 @@ namespace ncore::disassembled {
 			return result.substr(separator.length());
 		}
 
-		__forceinline instruction* data() noexcept {
-			return base_t::data();
+		__forceinline constexpr auto data() noexcept {
+			return instruction::collection::data();
 		}
 
-		__forceinline constexpr const instruction* data() const noexcept {
-			return base_t::data();
+		__forceinline constexpr const auto data() const noexcept {
+			return instruction::collection::data();
 		}
 
-		__forceinline instruction& at(size_t index) noexcept {
-			return base_t::at(index);
+		__forceinline constexpr auto at(size_t index) noexcept {
+			return instruction::collection::at(index);
 		}
 
-		__forceinline constexpr const instruction& at(size_t index) const noexcept {
-			return base_t::at(index);
+		__forceinline constexpr const auto& at(size_t index) const noexcept {
+			return instruction::collection::at(index);
 		}
 
-		__forceinline constexpr const const_iterator begin() const noexcept {
-			return base_t::begin();
+		__forceinline constexpr const auto begin() const noexcept {
+			return instruction::collection::begin();
 		}
 
-		__forceinline constexpr const const_iterator end() const noexcept {
-			return base_t::end();
+		__forceinline constexpr const auto end() const noexcept {
+			return instruction::collection::end();
 		}
 
 
@@ -198,7 +203,7 @@ namespace ncore::disassembled {
 				return info->procedure(index, instruction, *info->data);
 			};
 
-			return enumeration::enumerate<const instruction, enumeration_info*>(base_t::data(), base_t::size(), enumeration_procedure, &info);
+			return enumeration::enumerate<const instruction, enumeration_info*>(this->data(), this->size(), enumeration_procedure, &info);
 		}
 
 		__forceinline std::vector<instruction> search_by_name(const std::string& name) const noexcept {
@@ -253,7 +258,7 @@ namespace ncore::disassembled {
 
 			static auto enumeration_procedure = [](const size_t, const instruction& instruction, enumration_info* info) noexcept {
 				if (instruction.name() == "call") {
-					auto buffer = ((byte_t*)null);
+					auto buffer = byte_p();
 					auto destination = address_t(instruction.call_destination());
 
 					if (info->take_bytes(destination, &buffer, info->length)) {
@@ -272,11 +277,11 @@ namespace ncore::disassembled {
 		}
 
 		__forceinline instruction& operator[](size_t index) noexcept {
-			return base_t::operator[](index);
+			return instruction::collection::operator[](index);
 		}
 
 		__forceinline constexpr const instruction& operator[](size_t index) const noexcept {
-			return base_t::operator[](index);
+			return instruction::collection::operator[](index);
 		}
 
 		__forceinline bool operator==(const code& second) const noexcept {

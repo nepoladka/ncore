@@ -1,5 +1,6 @@
 #pragma once
-#include "base_64.hpp"
+#include "base64.hpp"
+
 #include <map>
 #include <vector>
 #include <string>
@@ -8,21 +9,22 @@
 #include <algorithm>
 #include <unordered_map>
 
-#ifndef CONFIG_VALID_KEY_CHARS
-#define CONFIG_VALID_KEY_CHARS "abcdefghijklmnopqrstuvwxyz_-0123456789"
+#ifndef NCORE_CONFIG_VALID_KEY_CHARS
+#define NCORE_CONFIG_VALID_KEY_CHARS "abcdefghijklmnopqrstuvwxyz_-0123456789"
 #endif
 
-#ifndef CONFIG_WHITESPACES
-#define CONFIG_WHITESPACES " \t\r\n\v\b\f"
+#ifndef NCORE_CONFIG_WHITESPACES
+#define NCORE_CONFIG_WHITESPACES " \t\r\n\v\b\f"
 #endif
 
-#ifndef CONFIG_SEPARATOR
-static constexpr const char __configSeparator[] = { ": " };
-#define CONFIG_SEPARATOR __configSeparator
+#ifndef NCORE_CONFIG_SEPARATOR
+#define NCORE_CONFIG_SEPARATOR ": "
 #endif
 
 namespace ncore {
     using string_t = std::string;
+
+    static constexpr const char const __configSeparator[] = { NCORE_CONFIG_SEPARATOR };
 
     template<typename _key_t = string_t, typename _value_t = string_t> class config {
     private:
@@ -133,12 +135,12 @@ namespace ncore {
 
             if (sortAlphabetically) {
                 for (auto it : _map) {
-                    buffer << it.first << CONFIG_SEPARATOR << it.second << std::endl;
+                    buffer << it.first << __configSeparator << it.second << std::endl;
                 }
             }
             else {
                 for (auto key : _orders) {
-                    buffer << key << CONFIG_SEPARATOR << _map[key] << std::endl;
+                    buffer << key << __configSeparator << _map[key] << std::endl;
                 }
             }
 
@@ -179,23 +181,21 @@ namespace ncore {
         }
 
         __forceinline bool load(std::istream& data) noexcept {
-            string_t line;
+            auto line = string_t();
 
-            for (int i = 0; std::getline(data, line); i++)
-            {
-                string_t key, value;
-                string_t lowerLine = line;
-                transform(lowerLine.begin(), lowerLine.end(), lowerLine.begin(), ::tolower);
-                std::istringstream iss(line);
+            for (auto i = index_t(); std::getline(data, line); i++) {
+                string_t key, value, lower_line = line;
+                std::transform(lower_line.begin(), lower_line.end(), lower_line.begin(), ::tolower);
+                //std::istringstream stream(line);
 
-                int keyStart = lowerLine.find_first_of(CONFIG_VALID_KEY_CHARS);
-                int keyEnd = lowerLine.find_first_not_of(CONFIG_VALID_KEY_CHARS, keyStart);
-                if (keyStart == std::string::npos || keyEnd == std::string::npos) continue;
-                key = lowerLine.substr(keyStart, keyEnd);
+                auto key_begin = lower_line.find_first_of(NCORE_CONFIG_VALID_KEY_CHARS);
+                auto key_end = lower_line.find_first_not_of(NCORE_CONFIG_VALID_KEY_CHARS, key_begin);
+                if (key_begin == std::string::npos || key_end == std::string::npos) continue;
+                key = lower_line.substr(key_begin, key_end);
 
-                int valueStart = lowerLine.find_first_not_of(CONFIG_WHITESPACES, keyEnd + sizeof(CONFIG_SEPARATOR) - 1);
-                if (valueStart == std::string::npos || valueStart == line.length() + 1) continue;
-                value = line.substr(valueStart, std::string::npos);
+                auto value_begin = lower_line.find_first_not_of(NCORE_CONFIG_WHITESPACES, key_end + sizeof(__configSeparator) - 1);
+                if (value_begin == std::string::npos || value_begin == line.length() + 1) continue;
+                value = line.substr(value_begin, std::string::npos);
 
                 set(key, value);
             }
@@ -206,12 +206,14 @@ namespace ncore {
         __forceinline bool load(const string_t& path) noexcept {
             std::ifstream file;
             file.open(path, std::ifstream::in, std::ifstream::_Openprot);
-            bool ret = load(file);
 
-            if (file.is_open()) 
+            auto result = load(file);
+
+            if (file.is_open()) {
                 file.close();
+            }
 
-            return ret;
+            return result;
         }
 
         __forceinline bool load() noexcept {
@@ -227,36 +229,37 @@ namespace ncore {
             return _map.empty();
         }
 
-        __forceinline string_t data(bool sortAlphabetically = false) noexcept {
-            return ((readable_config*)this)->get_data(sortAlphabetically);
+        __forceinline string_t data(bool sort = false) noexcept {
+            return ((readable_config*)this)->get_data(sort);
         }
 
-        __forceinline string_t data(bool sortAlphabetically = false) const noexcept {
-            return ((readable_config*)this)->get_data(sortAlphabetically);
+        __forceinline string_t data(bool sort = false) const noexcept {
+            return ((readable_config*)this)->get_data(sort);
         }
 
-        __forceinline bool save(bool sortAlphabetically = false) noexcept {
-            if (_path.empty()) return false;
-            return save(_path, sortAlphabetically);
+        __forceinline bool save(bool sort = false) noexcept {
+            return _path.empty() ? false : save(_path, sort);
         }
 
-        __forceinline bool save(std::ofstream& file, bool sortAlphabetically = false) noexcept {
+        __forceinline bool save(std::ofstream& file, bool sort = false) noexcept {
             if (!file.is_open()) return false;
 
-            file << data(sortAlphabetically) << std::endl;
+            file << data(sort) << std::endl;
 
             return true;
         }
 
-        __forceinline bool save(const string_t& path, bool sortAlphabetically = false) noexcept {
+        __forceinline bool save(const string_t& path, bool sort = false) noexcept {
             std::ofstream file;
             file.open(path, std::ifstream::trunc);
-            auto ret = save(file, sortAlphabetically);
 
-            if (file.is_open()) 
+            auto result = save(file, sort);
+
+            if (file.is_open()) {
                 file.close();
+            }
 
-            return ret;
+            return result;
         }
 
         __forceinline string_t get(const string_t& key) const noexcept {
@@ -270,10 +273,10 @@ namespace ncore {
             auto value = get(key);
             if (value.empty()) return false;
 
-            va_list argList;
-            __crt_va_start(argList, format);
-            auto result = _vsscanf_s_l(value.c_str(), format, nullptr, argList);
-            __crt_va_end(argList);
+            va_list arguments_list;
+            __crt_va_start(arguments_list, format);
+            auto result = _vsscanf_s_l(value.c_str(), format, nullptr, arguments_list);
+            __crt_va_end(arguments_list);
 
             return result;
         }

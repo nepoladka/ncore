@@ -1,10 +1,6 @@
 #pragma once
 #include "thread.hpp"
 
-#define noarg (void)
-#define __await(TASK) ((TASK).wait())
-#define __task(...) (ncore::async(__VA_ARGS__))
-
 namespace ncore {
 	template <typename _t> class task {
 	public:
@@ -17,19 +13,20 @@ namespace ncore {
 	public:
 		__forceinline task() = default;
 
+		//do not forget call task::release to destroy the object and release memory
 		template <class procedure_t, class... parameters_t> static __forceinline task create(procedure_t&& procedure, parameters_t&&... parameters) noexcept {
-			auto result = task();
-			
+			auto task = ncore::task<result_t>();
+
 			if constexpr (std::is_same<result_t, void>::value) {
-				result._result = nullptr;
+				task._result = nullptr;
 			}
 			else {
-				result._result = new result_t();
+				task._result = new result_t();
 			}
 
-			result._thread = thread::invoke(&result._result, std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
+			task._thread = thread::invoke(task._result, std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
 
-			return result;
+			return task;
 		}
 
 		static __forceinline task attach(const thread& thread) noexcept {
@@ -39,7 +36,7 @@ namespace ncore {
 			return result;
 		}
 
-		__forceinline ~task() noexcept {
+		__forceinline void release() noexcept {
 			if constexpr (std::is_same<result_t, void>::value) return;
 
 			auto result = _result;
@@ -79,15 +76,31 @@ namespace ncore {
 			return _result != nullptr;
 		}
 
-		__forceinline auto get() const noexcept {
+		__forceinline constexpr auto result() const noexcept {
 			_thread.wait();
-
 			if constexpr (std::is_same<result_t, void>::value) return;
 			else return _result ? *_result : result_t();
+		}
+
+		__forceinline constexpr auto get() const noexcept {
+			return result();
 		}
 	};
 
 	template <class procedure_t, class... parameters_t> static __forceinline auto async(procedure_t&& procedure, parameters_t&&... parameters) noexcept {
-		return task<std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>>::create(std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
+		using result_t = std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>;
+		return task<result_t>::create(std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
+	}
+
+	template<class result_t> static __forceinline auto wait_multi(const std::vector<task<result_t>>& tasks, ui32_t delay = 500) noexcept {
+		auto alive = count_t();
+		do {
+			thread::sleep(delay);
+
+			alive = null;
+			for (auto& task : tasks) {
+				alive += task.alive();
+			}
+		} while (alive);
 	}
 }

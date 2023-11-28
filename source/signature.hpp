@@ -1,12 +1,9 @@
 #pragma once
-#include "limit.hpp"
 #include "vector.hpp"
 #include "readable_byte.hpp"
-#include <string>
-#include <windows.h>
-#include <ntstatus.h>
-#include "includes/ntos.h"
+#include "environment.hpp"
 
+#include <string>
 
 #define UI64_ROUND_UP(VAL, STEP)	(((DWORD64(VAL)) + STEP - 1) & (~(STEP - 1)))
 #define UI64_ROUND_DOWN(VAL, STEP)	((DWORD64(VAL)) & (~(STEP - 1)))
@@ -16,7 +13,6 @@
 
 namespace ncore {
 	static constexpr const char const __asciiLowerUpperOffset = 'a' - 'A';
-
 
 	enum class known_state_t : byte_t {
 		unknown,	// ??

@@ -2,13 +2,9 @@
 #include "defines.hpp"
 #include "strings.hpp"
 #include "dimension_vector.hpp"
-#include "thread.hpp"
+#include "task.hpp"
 #include "file.hpp"
 #include <tlhelp32.h>
-
-#define minmax(MIN, VAL, MAX) max(min(VAL, MAX), MIN)
-#define normalize(VAL, MIN, MAX) (((VAL) - (MIN)) / ((MAX) - (MIN)))
-#define ABSOLUTE(VAL) (((VAL) > 0) ? (VAL) : (-VAL))
 
 #define rand_in_range(MIN, MAX) (MIN + ((long long(GetTickCount64() ^ __thread_id)) % (MAX - MIN)))
 

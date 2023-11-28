@@ -20,12 +20,19 @@
 #include "utils.hpp"
 #include "dimension_vector.hpp"
 
+#include <mutex>
+
 //to work with multiply threads, you need this in imconfig.h:
 //  struct ImGuiContext;
 //  extern thread_local ImGuiContext* ImGuiTLContext;
 //  #define GImGui ImGuiTLContext
 //and this in one of your .cpp files:
 //  thread_local ImGuiContext* ImGuiTLContext;
+
+//if you're using NCORE_GWINDOW_UTILS, you must add this in one of your .cpp files:
+//  ncore::ui32_t* ncore::dialogs_count = new ncore::ui32_t();
+//  ncore::gwindow* ncore::primary_window = nullptr;
+//  const ncore::gwindow::gui::font_info ncore::default_font = { 13, font_data_pointer };
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include "includes/gwindow/imgui/imgui.h"
@@ -79,8 +86,6 @@
 #define qda_yes_no          { "Yes", "No" }
 #define qda_yes_no_cancel   { "Yes", "No", "Cancel" }
 #endif
-
-#include <mutex>
 
 namespace ImGui {
     namespace Utils {
@@ -141,7 +146,7 @@ namespace ncore {
     static constexpr const auto const __pbarAnimationChar = NCORE_GWINDOW_PBAR_ANIMATION_CHAR;
     static constexpr const auto const __pbarAnimationCharsCount = char(NCORE_GWINDOW_PBAR_ANIMATION_CHARS_COUNT - 1);
 
-    extern ui32_t* dialogs_count; //pointer to your dialogs count value
+    extern ui32_t* dialogs_count; //ncore::ui32_t* ncore::dialogs_count = new ncore::ui32_t();
 #endif
 
     class glwindow {
@@ -776,16 +781,8 @@ namespace ncore {
 #ifdef NCORE_GWINDOW_UTILS
     using gwindow_callback_t = get_procedure_t(void, , gwindow&, gwindow::configuration*);
 
-    extern gwindow* primary_window; //your primary window
-    extern const gwindow::gui::font_info default_font; //default font info
-    
-    //todo:
-    //static __forceinline void get_foreground_window_properties(vec2i32* _size, vec2i32* _pos) noexcept {
-    //    auto foreground = GetForegroundWindow();
-    //    if (!foreground) return;
-    //
-    //
-    //}
+    extern gwindow* primary_window; //ncore::gwindow* ncore::primary_window = nullptr;
+    extern const gwindow::gui::font_info default_font; //const ncore::gwindow::gui::font_info ncore::default_font = { 13, binary_files::consola_ttf }
 
     static void gwindow_open_event(gwindow& window, gwindow::configuration* data) noexcept {
         if (window.handle() != primary_window->handle()) {
