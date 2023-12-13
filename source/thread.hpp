@@ -18,6 +18,7 @@ namespace ncore {
     class thread {
     public:
         using context_t = CONTEXT;
+        using environment_t = TEB;
 
         static __forceinline auto get_info(handle::native_t handle) noexcept {
             using info_t = THREAD_BASIC_INFORMATION;

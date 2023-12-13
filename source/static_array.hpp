@@ -14,21 +14,36 @@ namespace ncore {
 				return (static_array*)native;
 			}
 
-			__forceinline constexpr static_array(const _t data[_capacity] = nullptr, count_t size = _capacity) noexcept {
-				for (count_t i = 0; i < _capacity; i++) {
-					_values[i] = (data && i < size) ? data[i] : _t();
-				}
+			__forceinline constexpr static_array(const _t data[_capacity] = nullptr, size_t length = _capacity) noexcept {
+				set(data, length);
 			}
 
 			__forceinline static_array(const _t data, ...) noexcept {
 				va_list list;
 				va_start(list, _capacity);
 
-				for (size_t i = 0; i < _capacity; i++) {
+				for (index_t i = 0; i < _capacity; i++) {
 					_values[i] = va_arg(list, _t);
 				}
 
 				va_end(list);
+			}
+
+			__forceinline constexpr const void set(const _t data, ...) noexcept {
+				va_list list;
+				va_start(list, _capacity);
+
+				for (index_t i = 0; i < _capacity; i++) {
+					_values[i] = va_arg(list, _t);
+				}
+
+				va_end(list);
+			}
+
+			__forceinline constexpr const void set(const _t data[_capacity], size_t length) noexcept {
+				for (index_t i = 0; i < _capacity; i++) {
+					_values[i] = (data && i < length) ? data[i] : _t();
+				}
 			}
 
 			__forceinline constexpr _t* native() noexcept {
@@ -91,7 +106,7 @@ namespace ncore {
 			}
 
 			__forceinline constexpr const void copy(static_array& destination) const noexcept {
-				auto length = min(capacity(), destination.capacity());
+				auto length = __min(capacity(), destination.capacity());
 				for (auto i = 0; i < length; i++) {
 					destination._values[i] = _values[i];
 				}

@@ -11,7 +11,7 @@
 ncore::web::request::response_t ncore::web::request::send(const method_t method, const std::string& url, const query_t& parameters) {
 	using namespace cpr;
 
-	static auto execute_neded = [](const method_t method, const std::string& url, Parameters parameters) {
+	static auto wrapper = [](const method_t method, const std::string& url, Parameters parameters) {
 		switch (method) {
 		case method_t::m_get: return Get(Url{ url }, parameters);
 		case method_t::m_post: return Post(Url{ url }, parameters);
@@ -25,7 +25,7 @@ ncore::web::request::response_t ncore::web::request::send(const method_t method,
 		return Response();
 	};
 
-	auto response = execute_neded(method, url, Parameters{ (*(std::initializer_list<Parameter>*)(&parameters)) });
+	auto response = wrapper(method, url, Parameters{ (*(std::initializer_list<Parameter>*)(&parameters)) });
 
 	return { response.status_code, response.text };
 }

@@ -13,7 +13,6 @@
 #include "file.hpp"
 #include "handle.hpp"
 #include "input.hpp"
-#include "kernel_map.hpp"
 #include "process.hpp"
 #include "readable_byte.hpp"
 #include "shared_memory.hpp"
@@ -28,5 +27,13 @@
 #include "vector.hpp"
 #include "web.hpp"
 #include "zip.hpp"
+
+#ifdef NCORE_INCLUDE_KERNELMAP
+#include "kernel_map.hpp"
+#endif
+
+#ifdef NCORE_INCLUDE_GWINDOW
+#include "gwindow.hpp"
+#endif
 
 #endif

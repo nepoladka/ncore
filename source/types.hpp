@@ -43,28 +43,39 @@ namespace ncore {
 		using i16_t = __int16;
 		using i32_t = __int32;
 		using i64_t = __int64;
+		using i8_p = i8_t*;
+		using i16_p = i16_t*;
+		using i32_p = i32_t*;
+		using i64_p = i64_t*;
 
 		using ui8_t = unsigned __int8;
 		using ui16_t = unsigned __int16;
 		using ui32_t = unsigned __int32;
 		using ui64_t = unsigned __int64;
-
 		using ui8_p = ui8_t*;
 		using ui16_p = ui16_t*;
 		using ui32_p = ui32_t*;
 		using ui64_p = ui64_t*;
 
-		using pui64_t = part_value<ui64_t, ui32_t>;
-		using pui64_p = pui64_t*;
-
+		using pi16_t = part_value<i16_t, i8_t>;
+		using pi32_t = part_value<i32_t, i16_t>;
 		using pi64_t = part_value<i64_t, i32_t>;
+		using pi16_p = pi16_t*;
+		using pi32_p = pi32_t*;
 		using pi64_p = pi64_t*;
 
-		using sbyte_t = i8_t;
-		using sbyte_p = sbyte_t*;
+		using pui16_t = part_value<ui16_t, ui8_t>;
+		using pui32_t = part_value<ui32_t, ui16_t>;
+		using pui64_t = part_value<ui64_t, ui32_t>;
+		using pui16_p = pui16_t*;
+		using pui32_p = pui32_t*;
+		using pui64_p = pui64_t*;
 
 		using byte_t = ui8_t;
 		using byte_p = byte_t*;
+
+		using sbyte_t = i8_t;
+		using sbyte_p = sbyte_t*;
 
 		using lssize_t = i32_t;
 		using lsize_t = ui32_t;

@@ -52,6 +52,13 @@
 #define IMGUIFILEDIALOG_NO_EXPORT
 #include "includes/gwindow/imgui/file_dialog/imgui_file_dialog.h"
 
+#ifndef NCORE_GWINDOW_NO_DEFAULT_FONT
+#ifndef NCORE_GWINDOW_DEFAULT_FONT_PATH
+#define NCORE_GWINDOW_DEFAULT_FONT_PATH "includes/gwindow/fonts/consola.ttf.h"
+#endif
+#include NCORE_GWINDOW_DEFAULT_FONT_PATH
+#endif
+
 #ifndef NCORE_GWINDOW_DIALOGS_DELAY
 #define NCORE_GWINDOW_DIALOGS_DELAY 25 //ms
 #endif
@@ -293,7 +300,7 @@ namespace ncore {
                     break;
 
                 case hint_t::transparent:
-                    __debugbreak(); //todo: ...
+
                     break;
 
                 default: break;
@@ -785,7 +792,7 @@ namespace ncore {
     extern const gwindow::gui::font_info default_font; //const ncore::gwindow::gui::font_info ncore::default_font = { 13, binary_files::consola_ttf }
 
     static void gwindow_open_event(gwindow& window, gwindow::configuration* data) noexcept {
-        if (window.handle() != primary_window->handle()) {
+        if (primary_window && window.handle() != primary_window->handle()) {
             auto position = primary_window->position() + (primary_window->size() / 2) - (data->size / 2);
             window.move(position.x, position.y);
         }
@@ -1173,8 +1180,19 @@ namespace ncore {
         }
 
     public:
-        static __forceinline auto __fastcall open(const std::string& message, const std::vector<std::string>& answers, sindex_t* _result = nullptr, bool* _opened = nullptr, ui32_t text_color = null, bool text_centred = false, gwindow** _window = nullptr) noexcept {
-            return qdialog::open(frame, open, nullptr, new qmessage(message, text_color, text_centred), "Notification", { 450, 150 }, answers, true, _result, _opened, _window);
+        template<long _width = 250, long _height = 150> static __forceinline auto __fastcall open(const std::string& message, const std::vector<std::string>& answers, sindex_t* _result = nullptr, bool* _opened = nullptr, ui32_t text_color = null, bool text_centred = false, gwindow** _window = nullptr) noexcept {
+            //todo:
+            //auto& style = ImGui::GetStyle();
+            //auto font = ImGui::GetFont();
+            //auto line_height = /*font->FontSize + */ style.FramePadding.y * 2 + style.ItemSpacing.y;
+            //
+            //auto size = ImGui::CalcTextSize(message.c_str());
+            //auto lines = (size.y / font->FontSize);
+            //
+            //size += style.WindowPadding;
+            //size.y += line_height * (lines + !answers.empty());
+            
+            return qdialog::open(frame, open, nullptr, new qmessage(message, text_color, text_centred), "Notification", { _width, _height }, answers, true, _result, _opened, _window);
         }
     };
 

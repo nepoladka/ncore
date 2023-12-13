@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 
-//#pragma comment(lib, "web.lib")
+//#pragma comment(lib, "nweb.lib")
 
 namespace ncore::web {
 	namespace status {

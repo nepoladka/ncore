@@ -137,15 +137,15 @@ namespace ncore {
                 return normalized;
             }
 
-            __forceinline rgba linear_gradient(const rgba& second, float coef = 1.f) const noexcept {
-                auto left = normalize();
-                auto right = second.normalize();
+            __forceinline rgba linear_gradient(const rgba& second, float factor, bool alpha = false) const noexcept {
+                auto from = normalize();
+                auto to = second.normalize();
 
-                for (char c = 0; c < 4; c++) {
-                    left.vec[c] = left.vec[c] + (right.vec[c] - left.vec[c]) * coef;
+                for (char c = 0; c < 3 + alpha; c++) {
+                    from.vec[c] = from.vec[c] + (to.vec[c] - from.vec[c]) * factor;
                 }
 
-                return left.native();
+                return from.native();
             }
 
             __forceinline rgba between(const rgba& right) noexcept {

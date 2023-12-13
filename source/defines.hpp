@@ -9,18 +9,18 @@ extern"C" void* _ReturnAddress(void);
 #define CURRENT_THREAD_HANDLE ((void*)(-2))
 
 #ifndef PAGE_SIZE
-#define PAGE_SIZE 0x1000ull
+#define PAGE_SIZE 0x1000ui64
 #endif
 
 #define null (0)
 #define NULL (0)
 
-#define __b(NUM) size_t(NUM)
-#define __kb(NUM) size_t(__b(1024) * NUM)
-#define __mb(NUM) size_t(__kb(1024) * NUM)
-#define __gb(NUM) size_t(__mb(1024) * NUM)
-#define __tb(NUM) size_t(__gb(1024) * NUM)
-#define __pb(NUM) size_t(__tb(1024) * NUM)
+#define __b(NUM) size_t(NUM)				//byte
+#define __kb(NUM) size_t(__b(1024) * NUM)	//kilo
+#define __mb(NUM) size_t(__kb(1024) * NUM)	//mega
+#define __gb(NUM) size_t(__mb(1024) * NUM)	//giga
+#define __tb(NUM) size_t(__gb(1024) * NUM)	//tera
+#define __pb(NUM) size_t(__tb(1024) * NUM)	//peta
 
 #ifndef ncore_procedure
 #define ncore_procedure(TYPE) __forceinline TYPE __fastcall
@@ -82,6 +82,8 @@ const_value(double, __m_rad, 180.0 / M_PI);
 #define BEGIN_UNALIGNED begin_unaligned
 #define END_UNALIGNED end_unaligned
 
+#define bit_field(NAME) ncore::types::bit_t NAME : 1
+
 #define __tryif(STATE) if (STATE) __try
 #define __catch __except(true)
 #define __endtry __catch { }
@@ -92,7 +94,6 @@ const_value(double, __m_rad, 180.0 / M_PI);
 #define __likely [[likely]]
 #define __unlikely [[unlikely]]
 
-#define __forcedeprec(WHY) [[deprecated(WHY)]]
-#define __deprecated __forcedeprec
+#define __deprecated(WHY) [[deprecated(WHY)]]
 
 #include "types.hpp"

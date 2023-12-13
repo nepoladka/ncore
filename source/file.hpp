@@ -62,6 +62,14 @@ namespace ncore {
 			return _value;
 		}
 
+		__forceinline constexpr auto string() const noexcept {
+			return _value.string();
+		}
+
+		__forceinline constexpr auto wstring() const noexcept {
+			return _value.wstring();
+		}
+
 		__forceinline auto parts(strings::compatible_string* _drive, strings::compatible_string* _folder, strings::compatible_string* _name, strings::compatible_string* _extension) const noexcept {
 			auto drive = static_array<char, __filePathLimit>();
 			auto folder = static_array<char, __filePathLimit>();
@@ -295,11 +303,11 @@ namespace ncore {
 		}
 
 		__forceinline auto write(const void* data, size_t size, bool append = false) const noexcept {
-			return write_memory(append ? get_size() : null, size, data, append ? create_disposion::open_existing : create_disposion::create_force);
+			return write_memory(append ? get_size() : null, size, data, append ? create_disposion::open_or_create : create_disposion::create_force);
 		}
 
 		__forceinline auto write(const std::vector<byte_t>& data, bool append = false) noexcept {
-			return write_memory(append ? get_size() : null, data.size(), data.data(), append ? create_disposion::open_existing : create_disposion::create_force);
+			return write_memory(append ? get_size() : null, data.size(), data.data(), append ? create_disposion::open_or_create : create_disposion::create_force);
 		}
 
 		__forceinline auto writef(const char* format, ...) noexcept {
