@@ -1330,20 +1330,22 @@ namespace ncore {
             return thread::create(start, parameter, temp_handle(_id, _handle, PROCESS_ALL_ACCESS).get(), keep_handle, priority, flags, stack_size);
         }
 
-        __forceinline address_t load_library(const std::string& file) noexcept {
-            if (file.empty()) _Fail: return nullptr;
+        __forceinline address_t load_library(const ncore::path& file, module_t* _module = nullptr) noexcept {
+            if (file.string().empty()) _Fail: return nullptr;
 
-            if (_id == __process_id) return LoadLibraryA(file.c_str());
+            auto offset = sizeof(ui32_t) * bool(*ui32_p(file.string().c_str()) == *ui32_p("\\??\\"));
 
-            auto address = allocate_memory(file.length(), PAGE_READWRITE);
+            if (_id == __process_id) return LoadLibraryA(file.string().c_str() + offset);
+
+            auto address = allocate_memory(file.string().length(), PAGE_READWRITE);
             if (!address) goto _Fail;
 
             auto result = address_t();
 
-            if (write_memory(address, file.c_str(), file.length())) {
+            if (write_memory(address, file.string().c_str(), file.string().length())) {
                 if (auto procedure = load_library_t(search_exports("LoadLibraryA", 1).front().address)) {
-                    create_thread(procedure, address).wait();
-                    result = search_module(path(file).name().string());
+                    create_thread(procedure, address_t(ui64_t(address) + offset)).wait();
+                    result = search_module(file.name().string(), _module);
                 }
             }
 

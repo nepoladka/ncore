@@ -8,24 +8,23 @@
 #pragma comment(lib, "Wldap32.lib")
 #pragma comment(lib, "Crypt32.lib")
 
-ncore::web::request::response_t ncore::web::request::send(const method_t method, const std::string& url, const query_t& parameters) {
+ncore::web::request::response_t ncore::web::request::send(const method_t method, const url_t& url, const query_t& query) {
 	using namespace cpr;
 
-	static auto wrapper = [](const method_t method, const std::string& url, Parameters parameters) {
-		switch (method) {
-		case method_t::m_get: return Get(Url{ url }, parameters);
-		case method_t::m_post: return Post(Url{ url }, parameters);
-		case method_t::m_put: return Put(Url{ url }, parameters);
-		case method_t::m_head: return Head(Url{ url }, parameters);
-		case method_t::m_delete: return Delete(Url{ url }, parameters);
-		case method_t::m_options: return Options(Url{ url }, parameters);
-		case method_t::m_patch: return Patch(Url{ url }, parameters);
-		default: break;
-		}
-		return Response();
-	};
+	auto response = Response();
+	auto address = Url(url);
+	auto parameters = Parameters(*((std::initializer_list<Parameter>*)(&query)));
 
-	auto response = wrapper(method, url, Parameters{ (*(std::initializer_list<Parameter>*)(&parameters)) });
+	switch (method) {
+	case method_t::m_get: response = Get(address, parameters); break;
+	case method_t::m_post: response = Post(address, parameters); break;
+	case method_t::m_put: response = Put(address, parameters); break;
+	case method_t::m_head: response = Head(address, parameters); break;
+	case method_t::m_delete: response = Delete(address, parameters); break;
+	case method_t::m_options: response = Options(address, parameters); break;
+	case method_t::m_patch: response = Patch(address, parameters); break;
+	default: break;
+	}
 
 	return { response.status_code, response.text };
 }
