@@ -1,7 +1,11 @@
 #pragma once
 
 namespace ncore {
-	using id_t = unsigned long;
+	namespace types {
+		using id_t = unsigned long;
+	}
+
+	using namespace types;
 
 	namespace handle {
 		using native_t = void*;

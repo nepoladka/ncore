@@ -16,9 +16,9 @@
 #pragma warning(disable : 4996)
 
 namespace ncore {
-    static const handle::native_handle_t::closer_t const __processHandleCloser = handle::native_handle_t::closer_t(NtClose);
-    static const handle::native_handle_t::closer_t const __snapshotHandleCloser = handle::native_handle_t::closer_t(NtClose);
-    static constexpr const unsigned const __defaultProcessOpenAccess = PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION;
+    static const auto const __processHandleCloser = handle::native_handle_t::closer_t(NtClose);
+    static const auto const __snapshotHandleCloser = handle::native_handle_t::closer_t(NtClose);
+    static constexpr const auto const __defaultProcessOpenAccess = ui32_t(PROCESS_CREATE_THREAD | PROCESS_VM_OPERATION | PROCESS_VM_WRITE | PROCESS_VM_READ | PROCESS_SUSPEND_RESUME | PROCESS_QUERY_INFORMATION);
 
     class process;
 
@@ -694,7 +694,7 @@ namespace ncore {
         };
 #endif
 
-        static __forceinline handle::native_t get_handle(id_t id, unsigned access = __defaultProcessOpenAccess) {
+        static __forceinline handle::native_t get_handle(id_t id, ui32_t access = __defaultProcessOpenAccess) {
             auto result = handle::native_t();
             auto attributes = OBJECT_ATTRIBUTES();
             auto client_id = CLIENT_ID();
@@ -713,7 +713,7 @@ namespace ncore {
         id_t _id;
         handle_t _handle;
 
-        static __forceinline auto temp_handle(id_t id, const handle_t& source, unsigned open_access) noexcept {
+        static __forceinline handle_t temp_handle(id_t id, const handle_t& source, unsigned open_access) noexcept {
             auto value = source;
             if (!value) {
                 (value = handle_t(get_handle(id, open_access), __processHandleCloser, false)).close_on_destroy(true);
@@ -861,108 +861,76 @@ namespace ncore {
             return process(id);
         }
 
-        __forceinline id_t id() const noexcept {
+        __forceinline const auto id() const noexcept {
             return _id;
         }
 
-        __forceinline handle::native_t handle(unsigned open_access = __defaultProcessOpenAccess) const noexcept {
+        __forceinline auto handle(unsigned open_access = __defaultProcessOpenAccess) const noexcept {
             return _handle.get() ? _handle.get() : ((*(handle::native_handle_t*)&_handle) = handle::native_handle_t(get_handle(_id, open_access))).get();
         }
 
-        __forceinline void close_handle() noexcept {
+        __forceinline auto close_handle() noexcept {
             return _handle.close();
         }
 
-        __forceinline unsigned wait() const noexcept {
-            auto result = 0ui32;
-
-            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = WaitForSingleObject(handle.get(), INFINITE);
-
-            goto _Exit;
-        }
-
-        __forceinline bool alive(unsigned* _exit_code = nullptr) const noexcept {
-            auto result = false;
+        __forceinline auto get_exit_code() const noexcept {
+            auto result = ui32_t();
 
             auto handle = temp_handle(_id, _handle, PROCESS_QUERY_INFORMATION);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
+            if (!handle) _Exit: return result;
 
-            result = (WaitForSingleObject(handle.get(), null) != WAIT_OBJECT_0);
-
-            if (_exit_code) {
-                GetExitCodeProcess(handle.get(), LPDWORD(_exit_code));
-            }
+            GetExitCodeProcess(handle.get(), LPDWORD(&result));
 
             goto _Exit;
         }
 
-        __forceinline bool suspend() const noexcept {
+        __forceinline auto wait(ui32_t milisecounds_timeout = INFINITE) const noexcept {
+            auto handle = temp_handle(_id, _handle, PROCESS_QUERY_INFORMATION | SYNCHRONIZE);
+            return ui32_t(handle.get() ? WaitForSingleObject(handle.get(), milisecounds_timeout) : null);
+        }
+
+        __forceinline auto alive(ui32_t* _status = nullptr) const noexcept {
+            if (!_status) {
+                auto status = ui32_t();
+                _status = &status;
+            }
+
+            auto handle = temp_handle(_id, _handle, PROCESS_QUERY_INFORMATION | SYNCHRONIZE);
+            if (!handle) return false;
+
+            GetExitCodeProcess(handle.get(), LPDWORD(_status));
+
+            return *_status == STATUS_PENDING && WaitForSingleObject(handle.get(), null) != WAIT_OBJECT_0;
+        }
+
+        __forceinline auto suspend() const noexcept {
             return set_suspended(true);
         }
 
-        __forceinline bool resume() const noexcept {
+        __forceinline auto resume() const noexcept {
             return set_suspended(false);
         }
 
-        __forceinline bool terminate(long exit_status = EXIT_SUCCESS) const noexcept {
-            auto result = false;
-
+        __forceinline auto terminate(long exit_status = EXIT_SUCCESS) const noexcept {
             auto handle = temp_handle(_id, _handle, PROCESS_TERMINATE);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = NT_SUCCESS(NtTerminateProcess(handle.get(), exit_status));
-
-            goto _Exit;
+            return handle.get() ? NT_SUCCESS(NtTerminateProcess(handle.get(), exit_status)) : false;
         }
 
-        __forceinline bool set_priority(int priority_class) const noexcept {
-            auto result = false;
-
+        __forceinline auto set_priority(int priority_class) const noexcept {
             auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = SetPriorityClass(handle.get(), priority_class);
-
-            goto _Exit;
+            return bool(handle.get() ? SetPriorityClass(handle.get(), priority_class) : false);
         }
 
-        __forceinline int get_priority() const noexcept {
-            auto result = null;
-
-            auto handle = temp_handle(_id, _handle, PROCESS_QUERY_INFORMATION);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = GetPriorityClass(handle.get());
-
-            goto _Exit;
+        __forceinline auto get_priority() const noexcept {
+            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
+            return ui32_t(handle.get() ? GetPriorityClass(handle.get()) : null);
         }
 
-        template<size_t _bufferSize = MAX_PATH + FILENAME_MAX> __forceinline std::string get_path() const noexcept {
+        template<size_t _bufferSize = MAX_PATH + FILENAME_MAX> __forceinline auto get_path() const noexcept {
             auto result = std::string();
 
             auto handle = temp_handle(_id, _handle, PROCESS_QUERY_INFORMATION);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
+            if (!handle) _Exit: return result;
 
             unsigned long buffer_size = _bufferSize;
             char buffer[_bufferSize] = { null };
@@ -974,35 +942,35 @@ namespace ncore {
             goto _Exit;
         }
 
-        __forceinline std::string get_directory() const noexcept {
+        __forceinline auto get_directory() const noexcept {
             auto path = get_path();
 
             char drive[MAX_PATH]{ 0 };
             char folder[MAX_PATH]{ 0 };
             _splitpath(path.c_str(), drive, folder, nullptr, nullptr);
 
-            return drive + std::string(folder);
+            return std::string(drive) + folder;
         }
 
-        __forceinline std::string get_name() const noexcept {
+        __forceinline auto get_name() const noexcept {
             auto path = get_path();
 
             char name[FILENAME_MAX + 1]{ 0 };
             _splitpath(path.c_str(), nullptr, nullptr, name, nullptr);
 
-            return name;
+            return std::string(name);
         }
 
-        __forceinline std::string get_extension() const noexcept {
+        __forceinline auto get_extension() const noexcept {
             auto path = get_path();
 
             char extension[FILENAME_MAX + 1]{ 0 };
             _splitpath(path.c_str(), nullptr, nullptr, nullptr, extension);
 
-            return extension;
+            return std::string(extension);
         }
 
-        __forceinline PEB get_environment() const noexcept {
+        __forceinline auto get_environment() const noexcept {
             auto result = PEB();
 
             auto handle = temp_handle(_id, _handle, __defaultProcessOpenAccess);
@@ -1017,8 +985,8 @@ namespace ncore {
             goto _Exit;
         }
 
-        __forceinline std::string get_command_line() const noexcept {
-            auto result = std::string();
+        __forceinline auto get_command_line() const noexcept {
+            auto result = ncore::compatible_string();
 
             auto handle = temp_handle(_id, _handle, __defaultProcessOpenAccess);
             if (!handle) _Exit: return result;
@@ -1035,20 +1003,17 @@ namespace ncore {
 
             auto length = parameters.CommandLine.MaximumLength;
             auto buffer = new wchar_t[length] { 0 };
-            auto result_buffer = new char[length] { 0 };
 
             if (NT_SUCCESS(NtReadVirtualMemory(handle.get(), parameters.CommandLine.Buffer, buffer, length, nullptr))) {
-                WideCharToMultiByte(CP_UTF8, WC_COMPOSITECHECK, buffer, length, result_buffer, length, nullptr, nullptr);
-                result = result_buffer;
+                result = buffer;
             }
 
             delete[] buffer;
-            delete[] result_buffer;
 
             goto _Exit;
         }
 
-        __forceinline std::vector<id_t> get_threads(unsigned open_access = THREAD_ALL_ACCESS) const noexcept {
+        __forceinline auto get_threads(ui32_t open_access = THREAD_ALL_ACCESS) const noexcept {
             auto result = std::vector<id_t>();
 
             auto snapshot = handle::native_handle_t(
@@ -1058,25 +1023,26 @@ namespace ncore {
 
             if (!snapshot) _Exit: return result;
 
-            auto thread = THREADENTRY32{ sizeof(THREADENTRY32) };
-            if (!Thread32First(snapshot.get(), &thread)) goto _Exit;
+            auto entry = THREADENTRY32{ sizeof(THREADENTRY32) };
+            if (!Thread32First(snapshot.get(), &entry)) goto _Exit; //todo: replace this enumeration procedure to native
 
             do {
-                if (thread.th32OwnerProcessID == _id) {
-                    result.push_back(thread.th32ThreadID);
+                if (entry.th32OwnerProcessID == _id) if (auto thread = ncore::thread::get_handle(entry.th32ThreadID, open_access)) {
+                    result.push_back(entry.th32ThreadID);
+                    __threadHandleCloser(thread);
                 }
 
-                thread.dwSize = sizeof(THREADENTRY32);
-            } while (Thread32Next(snapshot.get(), &thread));
+                entry.dwSize = sizeof(THREADENTRY32);
+            } while (Thread32Next(snapshot.get(), &entry));
 
             goto _Exit;
         }
 
-        __forceinline address_t get_base() const noexcept {
+        __forceinline auto get_base() const noexcept {
             return get_environment().ImageBaseAddress;
         }
 
-        __forceinline std::vector<window_t> get_windows() const noexcept {
+        __forceinline auto get_windows() const noexcept {
             auto results = std::vector<window_t>();
 
             auto current = window_t(null);
@@ -1326,21 +1292,21 @@ namespace ncore {
             return true;
         }
 
-        __forceinline thread create_thread(address_t start, void* parameter = nullptr, bool keep_handle = false, int priority = null, unsigned flags = null, size_t stack_size = null) noexcept {
+        __forceinline auto create_thread(address_t start, void* parameter = nullptr, bool keep_handle = false, int priority = null, unsigned flags = null, size_t stack_size = null) noexcept {
             return thread::create(start, parameter, temp_handle(_id, _handle, PROCESS_ALL_ACCESS).get(), keep_handle, priority, flags, stack_size);
         }
 
-        __forceinline address_t load_library(const ncore::path& file, module_t* _module = nullptr) noexcept {
-            if (file.string().empty()) _Fail: return nullptr;
+        __forceinline auto load_library(const ncore::path& file, module_t* _module = nullptr) noexcept {
+            auto result = address_t();
+
+            if (file.string().empty()) _Exit: return result;
 
             auto offset = sizeof(ui32_t) * bool(*ui32_p(file.string().c_str()) == *ui32_p("\\??\\"));
 
-            if (_id == __process_id) return LoadLibraryA(file.string().c_str() + offset);
+            if (_id == __process_id) return address_t(LoadLibraryA(file.string().c_str() + offset));
 
             auto address = allocate_memory(file.string().length(), PAGE_READWRITE);
-            if (!address) goto _Fail;
-
-            auto result = address_t();
+            if (!address) goto _Exit;
 
             if (write_memory(address, file.string().c_str(), file.string().length())) {
                 if (auto procedure = load_library_t(search_exports("LoadLibraryA", 1).front().address)) {
@@ -1365,10 +1331,10 @@ namespace ncore {
         count /= sizeof(id_t);
 
         for (unsigned i = null; i < count; i++) {
-            auto handle = OpenProcess(open_access, FALSE, buffer[i]);
+            auto handle = ncore::process::get_handle(buffer[i], open_access);
             if (!handle) continue;
 
-            CloseHandle(handle);
+            __processHandleCloser(handle);
 
             results.push_back(process(buffer[i]));
         }

@@ -5,6 +5,7 @@
 
 #include "base64.hpp"
 #include "config.hpp"
+#include "collection.hpp"
 #include "defines.hpp"
 #include "dimension_vector.hpp"
 #include "disassembly.hpp"

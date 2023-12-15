@@ -1289,13 +1289,13 @@ namespace ncore {
                 *last_refresh_time = ncore::time::current();
                 *processes = ncore::get_processes();
 
-                for (count_t i = 0; i < processes->size(); i++) {
-                    auto& process = processes->at(i);
-                    if (process.search_module("jvm.dll")) continue; //todo: make it burn them
-
-                    processes->erase(processes->begin() + i);
-                    i--;
-                }
+                //for (count_t i = 0; i < processes->size(); i++) {
+                //    auto& process = processes->at(i);
+                //    if (process.search_module("jvm.dll")) continue; //todo: make it burn them
+                //
+                //    processes->erase(processes->begin() + i);
+                //    i--;
+                //}
             }
 
             if (ImGui::IsItemHovered()) {

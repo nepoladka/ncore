@@ -13,12 +13,25 @@
 */
 
 namespace ncore {
+    static constexpr const auto const __defaultThreadOpenAccess = ui32_t(THREAD_ALL_ACCESS);
     static const auto const __threadHandleCloser = handle::native_handle_t::closer_t(NtClose);
 
     class thread {
     public:
         using context_t = CONTEXT;
         using environment_t = TEB;
+
+        static __forceinline handle::native_t get_handle(id_t id, ui32_t access = __defaultThreadOpenAccess) {
+            auto result = handle::native_t();
+            auto attributes = OBJECT_ATTRIBUTES();
+            auto client_id = CLIENT_ID();
+
+            client_id.UniqueThread = handle::native_t(id);
+            client_id.UniqueProcess = handle::native_t(null);
+            InitializeObjectAttributes(&attributes, null, null, null, null);
+
+            return NT_SUCCESS(NtOpenThread(&result, access, &attributes, &client_id)) ? result : nullptr;
+        }
 
         static __forceinline auto get_info(handle::native_t handle) noexcept {
             using info_t = THREAD_BASIC_INFORMATION;
@@ -201,100 +214,64 @@ namespace ncore {
             return _handle.close();
         }
 
-        __forceinline ui32_t wait(ui32_t milisecounds_timeout = INFINITE) const noexcept {
-            auto result = 0ui32;
-
-            auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = WaitForSingleObject(handle.get(), milisecounds_timeout);
-
-            goto _Exit;
-        }
-
-        __forceinline bool alive(unsigned* _exit_code = nullptr) const noexcept {
-            auto result = false;
+        __forceinline auto get_exit_code() const noexcept {
+            auto result = ui32_t();
 
             auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
+            if (!handle) _Exit: return result;
 
-            result = (WaitForSingleObject(handle.get(), null) != WAIT_OBJECT_0);
-
-            if (_exit_code) {
-                GetExitCodeThread(handle.get(), (LPDWORD)(_exit_code));
-            }
+            GetExitCodeThread(handle.get(), LPDWORD(&result));
 
             goto _Exit;
         }
 
-        __forceinline bool suspend() const noexcept {
+        __forceinline auto wait(ui32_t milisecounds_timeout = INFINITE) const noexcept {
+            auto handle = temp_handle(_id, _handle, PROCESS_QUERY_INFORMATION | SYNCHRONIZE);
+            return ui32_t(handle.get() ? WaitForSingleObject(handle.get(), milisecounds_timeout) : null);
+        }
+
+        __forceinline auto alive(ui32_t* _status = nullptr) const noexcept {
+            if (!_status) {
+                auto status = ui32_t();
+                _status = &status;
+            }
+
+            auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION | SYNCHRONIZE);
+            if (!handle) return false;
+
+            GetExitCodeThread(handle.get(), LPDWORD(_status));
+
+            return *_status == STATUS_PENDING && WaitForSingleObject(handle.get(), null) != WAIT_OBJECT_0;
+        }
+
+        __forceinline auto suspend() const noexcept {
             return set_suspended(true);
         }
 
-        __forceinline bool resume() const noexcept {
+        __forceinline auto resume() const noexcept {
             return set_suspended(false);
         }
 
-        __forceinline bool terminate(long exit_status = EXIT_SUCCESS) const noexcept {
-            auto result = false;
-
+        __forceinline auto terminate(long exit_status = EXIT_SUCCESS) const noexcept {
             auto handle = temp_handle(_id, _handle, THREAD_TERMINATE);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = NT_SUCCESS(NtTerminateThread(handle.get(), exit_status));
-
-            goto _Exit;
+            return handle.get() ? NT_SUCCESS(NtTerminateThread(handle.get(), exit_status)) : false;
         }
 
-        __forceinline bool set_priority(int priority) const noexcept {
-            auto result = false;
-
+        __forceinline auto set_priority(ui32_t priority) const noexcept {
             auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = SetThreadPriority(handle.get(), priority);
-
-            goto _Exit;
+            return bool(handle.get() ? SetThreadPriority(handle.get(), priority) : false);
         }
 
-        __forceinline bool set_context(const context_t& context) const noexcept {
-            auto result = false;
-
+        __forceinline auto set_context(const context_t& context) const noexcept {
             auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = NT_SUCCESS(NtSetContextThread(handle.get(), PCONTEXT(&context)));
-
-            goto _Exit;
+            return handle.get() ? NT_SUCCESS(NtSetContextThread(handle.get(), PCONTEXT(&context))) : false;
         }
 
         __forceinline bool set_start_address(address_t address = nullptr) const noexcept {
-            auto result = false;
-
             auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            result = NT_SUCCESS(NtSetInformationThread(handle.get(), THREADINFOCLASS::ThreadQuerySetWin32StartAddress, &address, sizeof(address_t)));
-
-            goto _Exit;
+            return handle.get() ?
+                NT_SUCCESS(NtSetInformationThread(handle.get(), THREADINFOCLASS::ThreadQuerySetWin32StartAddress, &address, sizeof(address_t))) :
+                false;
         }
 
         __forceinline auto get_priority() const noexcept {
@@ -309,30 +286,14 @@ namespace ncore {
 
         __forceinline auto get_context() const noexcept {
             auto result = context_t();
-
             auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            NtGetContextThread(handle.get(), &result);
-
-            goto _Exit;
+            return handle.get() && NT_SUCCESS(NtGetContextThread(handle.get(), &result)) ? result : context_t();
         }
 
         __forceinline address_t get_start_address() const noexcept {
-            auto result = address_t(nullptr);
-
+            auto result = address_t();
             auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION);
-            if (!handle) {
-            _Exit:
-                return result;
-            }
-
-            NtQueryInformationThread(handle.get(), THREADINFOCLASS::ThreadQuerySetWin32StartAddress, &result, sizeof(address_t), null);
-
-            goto _Exit;
+            return handle.get() && NT_SUCCESS(NtQueryInformationThread(handle.get(), THREADINFOCLASS::ThreadQuerySetWin32StartAddress, &result, sizeof(address_t), null)) ? result : address_t();
         }
 
         template<typename _t = address_t> __forceinline _t get_environment_address() const noexcept {
@@ -346,7 +307,7 @@ namespace ncore {
             return (_t)information.TebBaseAddress;
         }
 
-        __forceinline TEB get_environment() const noexcept {
+        __forceinline auto get_environment() const noexcept {
             auto result = TEB();
 
             auto environment_address = get_environment_address();
