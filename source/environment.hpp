@@ -28,3 +28,34 @@
 #define GetLastStatus() NTSTATUS(__thread_environment->LastStatusValue)
 #define SetLastStatus(VALUE) (__thread_environment->LastStatusValue = VALUE)
 #endif
+
+namespace ncore::environment {
+	template<typename _t = void*, const bool _x64 = true> static __forceinline constexpr const auto make_syscall_code(void* holder, unsigned __int32 index) noexcept {
+		auto values = (unsigned __int32*)holder;
+
+		if constexpr (_x64) {
+			values[0] = 0xb8d18b'4c;	//mov r10, rcx | mov ecx, code
+			values[1] = index;			//code
+			values[2] = 0xcc'c3'050f;	//syscall | ret | int 3
+		}
+		else {
+			__debugbreak(); //todo
+
+			values[0] = 0xb8d18b'4c;	//mov r10, rcx | mov ecx, code
+			values[1] = index;			//code
+			values[2] = 0xcc'c3'2ecd;	//int 2e | ret | int 3
+		}
+
+		return _t(holder);
+	}
+
+	template<const bool _x64 = true> static __forceinline constexpr const auto get_procedure_syscall_index(void* address) noexcept {
+		if constexpr (_x64) {
+			return ((unsigned __int32*)address)[1];
+		}
+		else {
+			__debugbreak; //todo
+			return (unsigned __int32)null;
+		}
+	}
+}

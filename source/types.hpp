@@ -163,6 +163,10 @@ namespace ncore {
 				return result;
 			}
 
+			__forceinline constexpr const auto difference() const noexcept {
+				return max - min;
+			}
+
 			__forceinline constexpr auto& operator[](bool get_max) noexcept {
 				return get_max ? max : min;
 			}
@@ -191,6 +195,7 @@ namespace ncore {
 		template<typename _t> using bound = limit<_t, true, true>;
 		template<typename _t> using range = limit<_t, false, false>;
 
+#ifdef get_procedure_t
 		template<typename part_t, typename data_t = void*> struct aligned {
 			using callback_t = get_procedure_t(void, , index_t index, part_t value, data_t data);
 
@@ -214,16 +219,25 @@ namespace ncore {
 			}
 
 			__forceinline constexpr aligned(part_t number, part_t maximal) noexcept {
-				low = number % maximal;
-				high = number - low;
-				count = high / maximal;
-				divided = high / count;
+				if (maximal) {
+					low = number % maximal;
+					high = number - low;
+					count = high / maximal;
+					divided = high / count;
+					return;
+				}
+
+				low = number;
+				high = part_t();
+				count = null;
+				divided = null;
 			}
 
 			__forceinline constexpr auto part() const noexcept {
 				return divided;
 			}
 		};
+#endif
 	}
 
 	using namespace types;

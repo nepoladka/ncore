@@ -29,13 +29,19 @@ extern"C" void* _ReturnAddress(void);
 #define const_value(TYPE, NAME, VALUE) static constexpr const TYPE const NAME = { VALUE }
 #define CONST_VALUE const_value
 
-#ifndef M_RAD
 #ifndef M_PI
-#define M_PI 3.14159265358979323846
+const_value(double, __m_pi, 3.14159265358979323846);
+#define M_PI __m_pi
 #endif
 
-const_value(double, __m_rad, 180.0 / M_PI);
-#define M_RAD (__m_rad)
+#ifndef M_180_PI
+const_value(double, __m_180_pi, 180.0 / M_PI);
+#define M_180_PI (__m_180_pi)
+#endif
+
+#ifndef M_PI_180
+const_value(double, __m_pi_180, M_PI / 180.0);
+#define M_PI_180 (__m_pi_180)
 #endif
 
 #ifndef __max
@@ -82,11 +88,19 @@ const_value(double, __m_rad, 180.0 / M_PI);
 #define BEGIN_UNALIGNED begin_unaligned
 #define END_UNALIGNED end_unaligned
 
+#define typeof decltype
+
 #define bit_field(NAME) ncore::types::bit_t NAME : 1
+#define __bit(NAME) bool NAME : 1
+
+#define __property(GETTER, SETTER) __declspec(property(get = ##GETTER, put = ##SETTER))
+#define __public public:
+#define __private private:
 
 #define __tryif(STATE) if (STATE) __try
 #define __catch __except(true)
 #define __endtry __catch { }
+
 #define __extern extern "C"
 #define __extern_export __extern __declspec(dllexport)
 #define __extern_import __extern __declspec(dllimport)

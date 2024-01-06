@@ -13,6 +13,10 @@
 #pragma comment(lib, "dbghelp.lib")
 #endif
 
+#ifdef NCORE_PROCESS_EXTRA
+NCORE_PROCESS_EXTRA
+#endif
+
 #pragma warning(disable : 4996)
 
 namespace ncore {
@@ -805,7 +809,7 @@ namespace ncore {
         }
 
     public:
-        __forceinline process(id_t id = null, unsigned open_access = null) noexcept {
+        __forceinline constexpr process(id_t id = null, unsigned open_access = null) noexcept {
             if ((_id = id) && open_access) {
                 _handle = handle_t(get_handle(id, open_access), __processHandleCloser, false);
             }
@@ -816,15 +820,15 @@ namespace ncore {
             _handle = handle_t(win32_handle, __processHandleCloser, false);
         }
 
-        static __forceinline process current(unsigned open_access = PROCESS_ALL_ACCESS) noexcept {
+        static __forceinline process current(ui32_t open_access = __defaultProcessOpenAccess) noexcept {
             return open_access ? process(__process_id, open_access) : process(__current_process);
         }
 
-        static __forceinline process get_by_id(id_t id, unsigned open_access = null) noexcept {
+        static __forceinline process get_by_id(id_t id, ui32_t open_access = null) noexcept {
             return process(id, open_access);
         }
 
-        static __forceinline process get_by_name(const std::string& name, unsigned open_access = __defaultProcessOpenAccess) noexcept {
+        static __forceinline process get_by_name(const std::string& name, ui32_t open_access = __defaultProcessOpenAccess) noexcept {
             auto processes = get_processes(open_access);
             for (auto& process : processes) {
                 if (process.get_name() == name) return ncore::process(process.id(), open_access);
@@ -832,7 +836,7 @@ namespace ncore {
             return process();
         }
 
-        static __forceinline process get_by_window(HWND window, unsigned open_access = null) noexcept {
+        static __forceinline process get_by_window(HWND window, ui32_t open_access = null) noexcept {
             auto owner_id = id_t(null);
             GetWindowThreadProcessId(window, &owner_id);
             return process(owner_id, open_access);
@@ -865,7 +869,7 @@ namespace ncore {
             return _id;
         }
 
-        __forceinline auto handle(unsigned open_access = __defaultProcessOpenAccess) const noexcept {
+        __forceinline auto handle(ui32_t open_access = __defaultProcessOpenAccess) const noexcept {
             return _handle.get() ? _handle.get() : ((*(handle::native_handle_t*)&_handle) = handle::native_handle_t(get_handle(_id, open_access))).get();
         }
 
@@ -1177,6 +1181,17 @@ namespace ncore {
             return address_t(nullptr);
         }
 
+        __forceinline bool is_memory_available(address_t address) const noexcept {
+            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
+            if (!handle) return false;
+
+            auto region_info = MEMORY_BASIC_INFORMATION();
+
+            return NT_SUCCESS(NtQueryVirtualMemory(handle.get(), address, MEMORY_INFORMATION_CLASS::MemoryBasicInformation, &region_info, sizeof(region_info), nullptr)) ?
+                !bool(region_info.State & MEM_FREE) :
+                false;
+        }
+
         __forceinline address_t allocate_memory(size_t size = PAGE_SIZE, ui32_t protection = PAGE_EXECUTE_READWRITE, address_t address = nullptr) noexcept {
             auto result = address_t(nullptr);
 
@@ -1198,7 +1213,9 @@ namespace ncore {
             auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
             if (!handle) goto _Exit;
 
-            result = NT_SUCCESS(NtFreeVirtualMemory(handle.get(), &address, &size, MEM_DECOMMIT));
+            result =
+                NT_SUCCESS(NtFreeVirtualMemory(handle.get(), &address, &size, MEM_DECOMMIT)) &&
+                NT_SUCCESS(NtFreeVirtualMemory(handle.get(), &address, &size, MEM_RELEASE));
 
             goto _Exit;
         }

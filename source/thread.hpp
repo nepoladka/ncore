@@ -298,7 +298,7 @@ namespace ncore {
 
         template<typename _t = address_t> __forceinline _t get_environment_address() const noexcept {
             auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
-            if (!handle) return nullptr;
+            if (!handle) return (_t)nullptr;
 
             auto information = THREAD_BASIC_INFORMATION();
             auto information_length = ULONG(sizeof(information));

@@ -122,8 +122,12 @@ namespace ncore {
 
 		__forceinline auto name() const noexcept {
 			auto result = strings::compatible_string();
-			parts(nullptr, &result);
-			return result;
+			return parts(nullptr, &result), result;
+		}
+
+		__forceinline auto directory() const noexcept {
+			auto result = strings::compatible_string();
+			return parts(&result, nullptr), result;
 		}
 	};
 

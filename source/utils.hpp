@@ -836,8 +836,8 @@ namespace ncore {
         }
 
         static __forceinline void reverse_copy(void* destination, const void* source, size_t length) noexcept {
-            auto dst = (byte_t*)destination;
-            auto src = (byte_t*)source + length - 1;
+            auto dst = byte_p(destination);
+            auto src = byte_p(source) + length - 1;
 
             for (size_t i = 0; i < length; i++, dst++, src--) {
                 *dst = *src;

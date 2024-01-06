@@ -5,11 +5,11 @@
 
 #include "base64.hpp"
 #include "config.hpp"
+#include "enumeration.hpp"
 #include "collection.hpp"
 #include "defines.hpp"
 #include "dimension_vector.hpp"
 #include "disassembly.hpp"
-#include "enumeration.hpp"
 #include "environment.hpp"
 #include "file.hpp"
 #include "handle.hpp"

@@ -46,20 +46,12 @@ namespace ncore {
 				}
 			}
 
-			__forceinline constexpr _t* native() noexcept {
-				return _values;
-			}
-
-			__forceinline constexpr const _t* native() const noexcept {
-				return _values;
-			}
-
 			__forceinline constexpr _t* data() noexcept {
-				return native();
+				return _values;
 			}
 
 			__forceinline constexpr const _t* data() const noexcept {
-				return native();
+				return _values;
 			}
 
 			__forceinline constexpr size_t size() const noexcept {
@@ -86,7 +78,7 @@ namespace ncore {
 				return _values + _capacity;
 			}
 
-			__forceinline size_t length(_t ending = _t()) const noexcept {
+			__forceinline auto length(_t ending = _t()) const noexcept {
 				auto result = size_t(0);
 
 				for (auto& item : _values) {
@@ -97,17 +89,16 @@ namespace ncore {
 				return result;
 			}
 
-			__forceinline constexpr _t& at(size_t index) noexcept {
+			__forceinline constexpr auto& at(size_t index) noexcept {
 				return _values[index];
 			}
 
-			__forceinline constexpr const _t& at(size_t index) const noexcept {
+			__forceinline constexpr const auto& at(size_t index) const noexcept {
 				return _values[index];
 			}
 
 			__forceinline constexpr const void copy(static_array& destination) const noexcept {
-				auto length = __min(capacity(), destination.capacity());
-				for (auto i = 0; i < length; i++) {
+				for (auto i = index_t(), j = __min(capacity(), destination.capacity()); i < j; i++) {
 					destination._values[i] = _values[i];
 				}
 			}
@@ -121,7 +112,7 @@ namespace ncore {
 			}
 
 			__forceinline bool operator==(const static_array& second) const noexcept {
-				for (size_t i = 0; i < _capacity; i++)
+				for (index_t i = 0; i < _capacity; i++)
 					if (_values[i] != second._values[i]) return false;
 
 				return true;

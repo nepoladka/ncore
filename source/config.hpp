@@ -262,11 +262,11 @@ namespace ncore {
             return result;
         }
 
-        __forceinline string_t get(const string_t& key) const noexcept {
+        __forceinline string_t get(const string_t& key, const string_t& default_value = string_t()) const noexcept {
             for (auto& part : _map) {
                 if (part.first == key) return part.second;
             }
-            return string_t();
+            return default_value;
         }
 
         __forceinline bool fget(const string_t& key, const char* const format, ...) const noexcept {

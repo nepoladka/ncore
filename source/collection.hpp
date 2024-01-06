@@ -12,11 +12,13 @@ namespace ncore {
 
 			enum : index_t { npos = -1 };
 
-			template<typename data_t> using enumeration_procedure_t = get_procedure_t(ncore::enumeration::return_t, , index_t, _t&, data_t);
+			template<typename data_t, typename element_t> using enumeration_procedure_t = get_procedure_t(ncore::enumeration::return_t, , index_t, element_t, data_t);
 			using comparison_procedure_t = get_procedure_t(int, , const _t& left, const _t& right);
 			using native_comparison_procedure_t = _CoreCrtNonSecureSearchSortCompareFunction;
 
-			__forceinline constexpr collection() noexcept = default;
+			__forceinline constexpr collection() noexcept : base_t({ }) {
+				return;
+			}
 
 			__forceinline constexpr collection(const std::vector<_t>& vector) noexcept : base_t(vector) {
 				return;
@@ -34,6 +36,10 @@ namespace ncore {
 				return;
 			}
 
+			__forceinline constexpr collection(count_t count, const _t& value = _t()) noexcept : base_t(count, value) {
+				return;
+			}
+
 			__forceinline constexpr auto& vector() noexcept {
 				return *(std::vector<_t>*)this;
 			}
@@ -46,7 +52,15 @@ namespace ncore {
 				return base_t::size();
 			}
 
-			template<typename data_t> __forceinline constexpr auto enumerate(enumeration_procedure_t<data_t> procedure, data_t data) noexcept {
+			template<typename data_t> __forceinline constexpr auto enumerate(enumeration_procedure_t<data_t, _t&> procedure, data_t data) noexcept {
+				auto base = base_t::begin();
+				if (procedure) __likely for (index_t i = 0; i < base_t::size(); i++) {
+					if (procedure(i, *(base + i), data) == ncore::enumeration::return_t::stop) return i;
+				}
+				return index_t(npos);
+			}
+
+			template<typename data_t> __forceinline constexpr auto enumerate(enumeration_procedure_t<data_t, const _t&> procedure, data_t data) const noexcept {
 				auto base = base_t::begin();
 				if (procedure) __likely for (index_t i = 0; i < base_t::size(); i++) {
 					if (procedure(i, *(base + i), data) == ncore::enumeration::return_t::stop) return i;
@@ -75,12 +89,22 @@ namespace ncore {
 
 			__forceinline constexpr auto skip_first(count_t count) const noexcept {
 				auto result = collection();
-				return result.insert(result.end(), base_t::begin() + count, base_t::end()), result;
+
+				if (base_t::size() >= count) {
+					result.insert(result.end(), base_t::begin() + count, base_t::end());
+				}
+
+				return result;
 			}
 
 			__forceinline constexpr auto skip_last(count_t count) const noexcept {
 				auto result = collection();
-				return result.insert(result.end(), base_t::begin(), base_t::end() - count), result;
+
+				if (base_t::size() >= count) {
+					result.insert(result.end(), base_t::begin(), base_t::end() - count);
+				}
+
+				return result;
 			}
 
 			__forceinline constexpr auto& exclude(base_t::const_iterator position) noexcept {
@@ -101,11 +125,11 @@ namespace ncore {
 				return result.exclude(position);
 			}
 
-			template<bool _not = false> __forceinline constexpr auto& exclude(const collection& elements) noexcept {
+			template<bool _not = false, typename data_t = bool> __forceinline constexpr auto& exclude(const collection& elements, enumeration_procedure_t<data_t, _t&> before_erase = nullptr, data_t data = data_t()) noexcept {
 				auto base = base_t::begin();
 				for (index_t i = 0; i < base_t::size(); i++) {
 					auto current = base + i;
-					auto element = *current;
+					auto& element = *current;
 
 					auto in = false;
 					for (auto& second : elements) {
@@ -117,6 +141,10 @@ namespace ncore {
 					}
 					else if (!in) continue;
 
+					if (before_erase) {
+						if (before_erase(i, element, data) == ncore::enumeration::return_t::skip) continue;
+					}
+
 					base_t::erase(current);
 					i--;
 				}
@@ -124,17 +152,17 @@ namespace ncore {
 				return *this;
 			}
 
-			template<bool _not = false> __forceinline constexpr auto exclude(const collection& elements) const noexcept {
+			template<bool _not = false, typename data_t = bool> __forceinline constexpr auto exclude(const collection& elements, enumeration_procedure_t<data_t, const _t&> before_erase = nullptr, data_t data = data_t()) const noexcept {
 				auto result = *this;
-				return result.exclude<_not>(elements);
+				return result.exclude<_not, data_t>(elements, before_erase, data);
 			}
 
-			__forceinline constexpr auto& exclude_not(const collection& elements) noexcept {
-				return exclude<true>(elements);
+			template<typename data_t = bool> __forceinline constexpr auto& exclude_not(const collection& elements, enumeration_procedure_t<data_t, _t&> before_erase = nullptr, data_t data = data_t()) noexcept {
+				return exclude<true, data_t>(elements, before_erase, data);
 			}
 
-			__forceinline constexpr auto exclude_not(const collection& elements) const noexcept {
-				return exclude<true>(elements);
+			template<typename data_t = bool> __forceinline constexpr auto exclude_not(const collection& elements, enumeration_procedure_t<data_t, const _t&> before_erase = nullptr, data_t data = data_t()) const noexcept {
+				return exclude<true, data_t>(elements, before_erase, data);
 			}
 
 			__forceinline constexpr auto& operator-=(const collection& elements) noexcept {

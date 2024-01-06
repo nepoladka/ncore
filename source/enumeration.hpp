@@ -6,7 +6,7 @@
 #endif
 
 namespace ncore::enumeration {
-	enum class return_t : bool { next = false, stop = true };
+	enum class return_t : bool { next = false, skip = false, stop = true };
 
 	template<typename item_t, typename data_t = void*> using procedure_t = get_procedure_t(return_t, , size_t& index, item_t& item, data_t data);
 	template<typename item_t, typename data_t = void*, typename result_t = bool> using procedure_ex_t = get_procedure_t(return_t, , size_t& index, item_t& item, data_t data, result_t& result);
