@@ -30,6 +30,9 @@
 #include "vector.hpp"
 #include "web.hpp"
 #include "zip.hpp"
+#include "pair.hpp"
+#include "tagged_pool.hpp"
+#include "unhashed_map.hpp"
 
 #ifdef NCORE_INCLUDE_KERNELMAP
 #include "kernel_map.hpp"
