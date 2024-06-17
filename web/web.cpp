@@ -29,8 +29,8 @@ ncore::web::request::response_t ncore::web::request::send(const method_t method,
 	return { response.status_code, response.text };
 }
 
-ncore::web::socket::result_t ncore::web::socket::client::connect() {
-	if (_ip.empty() || _port.empty()) return { r_not_initialized };
+ncore::web::socket::result_t ncore::web::socket::client::connect(family family, type type, protocol protocol) {
+	if (_ip.empty()) return { r_not_initialized };
 
 	struct addrinfo* address = NULL, hints = { NULL };
 
@@ -46,11 +46,11 @@ ncore::web::socket::result_t ncore::web::socket::client::connect() {
 		return result;
 	}
 
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_protocol = IPPROTO_TCP;
+	hints.ai_family = int(family);
+	hints.ai_socktype = int(type);
+	hints.ai_protocol = int(protocol);
 
-	status = getaddrinfo(_ip.c_str(), _port.c_str(), &hints, &address);
+	status = getaddrinfo(_ip.c_str(), _port.empty() ? nullptr : _port.c_str(), &hints, &address);
 	if (status != NO_ERROR) {
 		result = { r_get_address_info_failed, status };
 
@@ -86,38 +86,46 @@ ncore::web::socket::result_t ncore::web::socket::client::connect() {
 
 	_handle = socket;
 
-	setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&__defaultTimeout, sizeof(unsigned));
 	setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, (const char*)&__defaultTimeout, sizeof(unsigned));
+	setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, (const char*)&__defaultTimeout, sizeof(unsigned));
 
 	goto _Exit;
 }
 
-bool ncore::web::socket::client::disconnect() {
-	if (!_handle) return false;
+ncore::web::socket::result_t ncore::web::socket::client::disconnect() {
+	if (!_handle) return { r_not_initialized };
 
 	closesocket(_handle);
 	WSACleanup();
 	_handle = NULL;
 
-	return true;
+	return { r_success };
 }
 
-bool ncore::web::socket::client::send(const void* data, size_t length) {
-	if (!_handle) return false;
+ncore::web::socket::result_t ncore::web::socket::client::send(const void* data, size_t length) {
+	if (!_handle) return { r_not_initialized };
 
-	return ::send(_handle, (char*)data, length, 0) > 0;
+	auto result = ::send(_handle, (char*)data, length, 0);
+	if (result > 0) return { r_success };
+
+	return { r_failure, WSAGetLastError() };
 }
 
-bool ncore::web::socket::client::receive(void* _buffer, size_t size, size_t* _length) {
-	if (!_handle) return false;
+ncore::web::socket::result_t ncore::web::socket::client::receive(void* _buffer, size_t size, size_t* _length) {
+	if (!_handle) return { r_not_initialized };
 
-	return (*_length = recv(_handle, (char*)_buffer, size, 0)) > 0;
+	auto result = recv(_handle, (char*)_buffer, size, 0);
+	*_length = result;
+
+	if (result > 0) return { r_success };
+
+	return { r_failure, WSAGetLastError() };
 }
 
-bool ncore::web::socket::client::set_timeout(bool for_receive, unsigned timeout) {
-	if (!_handle) return false;
+ncore::web::socket::result_t ncore::web::socket::client::set_timeout(bool for_receive, unsigned timeout) {
+	if (!_handle) return { r_not_initialized };
 
 	setsockopt(_handle, SOL_SOCKET, SO_SNDTIMEO + for_receive, (const char*)&timeout, sizeof(unsigned));
 
-	return true;
+	return { r_success };
 }

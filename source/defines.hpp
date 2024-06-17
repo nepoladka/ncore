@@ -57,7 +57,8 @@ const_value(double, __m_pi_180, M_PI / 180.0);
 #endif
 
 #ifndef __normalize
-#define __normalize(MIN, VAL, MAX) (((VAL) - (MIN)) / ((MAX) - (MIN)))
+//#define __normalize(MIN, VAL, MAX) (((VAL) - (MIN)) / ((MAX) - (MIN)))
+#define __normalize(MIN, VAL, MAX) ((VAL) < (MIN) ? (0) : ((VAL > MAX) ? (1) : (((VAL) - (MIN)) / ((MAX) - (MIN)))))
 #endif
 
 #ifndef __absolute

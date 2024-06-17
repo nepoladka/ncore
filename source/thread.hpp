@@ -1,8 +1,8 @@
 #pragma once
-#include "defines.hpp"
 #include "handle.hpp"
-#include "static_array.hpp"
+#include "defines.hpp"
 #include "environment.hpp"
+#include "static_array.hpp"
 
 #include <memory>
 #include <string>
@@ -38,8 +38,7 @@ namespace ncore {
 
             auto information = info_t();
             if (handle) {
-                auto information_length = ULONG(sizeof(information));
-                NtQueryInformationThread(handle, THREADINFOCLASS::ThreadBasicInformation, &information, information_length, &information_length);
+                NtQueryInformationThread(handle, THREADINFOCLASS::ThreadBasicInformation, &information, sizeof(information), nullptr);
             }
 
             return information;
@@ -53,8 +52,24 @@ namespace ncore {
             return id_t(get_info(handle).ClientId.UniqueProcess);
         }
 
-        static __forceinline auto get_priority(handle::native_t handle) noexcept {
-            return ui32_t(get_info(handle).BasePriority);
+        template<bool _base = true> static __forceinline auto get_priority(handle::native_t handle) noexcept {
+            if constexpr (_base) return ui32_t(get_info(handle).BasePriority);
+            else return ui32_t(get_info(handle).Priority);
+        }
+
+        static __forceinline auto set_priority(handle::native_t handle, ui32_t priority) noexcept {
+            if (!((priority & 0x30000) == 0 || (priority & 0xFFFCFFFF) != 0)) return false; //KernelBase.SetThreadPriority checks
+
+            if (priority == THREAD_BASE_PRIORITY_LOWRT) {
+                priority++;
+            }
+            else if (priority == THREAD_BASE_PRIORITY_IDLE) {
+                priority--;
+            }
+
+            auto status = NtSetInformationThread(handle, THREADINFOCLASS::ThreadBasePriority, &priority, sizeof(ui32_t));
+
+            return NT_SUCCESS(status);
         }
 
     protected:
@@ -70,10 +85,10 @@ namespace ncore {
             _handle = handle;
         }
 
-        __forceinline handle_t temp_handle(id_t id, const handle_t& source, unsigned open_access) const noexcept {
+        __forceinline handle_t temp_handle(id_t id, const handle_t& source, ui32_t open_access) const noexcept {
             auto result = (handle_t&)source;
             if (!source) {
-                (result = handle_t(OpenThread(open_access, false, id), __threadHandleCloser, false)).close_on_destroy(true);
+                (result = handle_t(get_handle(id, open_access), __threadHandleCloser, false)).close_on_destroy(true);
             }
 
             return result;
@@ -144,23 +159,15 @@ namespace ncore {
         }
 
     public:
-        __forceinline thread(id_t id = null, unsigned open_access = null) noexcept {
+        __forceinline thread(id_t id = null, ui32_t open_access = null) noexcept {
             if ((_id = id) && open_access) {
-                _handle = handle_t(OpenThread(id, false, open_access), __threadHandleCloser, false);
+                _handle = handle_t(get_handle(id, open_access), __threadHandleCloser, false);
             }
         }
 
         __forceinline thread(handle::native_t win32_handle) noexcept {
             _id = get_id(win32_handle);
             _handle = handle_t(win32_handle, __threadHandleCloser, false);
-        }
-
-        __forceinline id_t id() const noexcept {
-            return _id;
-        }
-
-        __forceinline handle::native_t handle() const noexcept {
-            return _handle.get();
         }
 
         static __forceinline thread current(unsigned open_access = THREAD_ALL_ACCESS) noexcept {
@@ -176,7 +183,7 @@ namespace ncore {
             if (!handle) return thread();
 
             if (priority) {
-                SetThreadPriority(handle, priority);
+                set_priority(handle, priority);
             }
 
             if (keep_handle) return thread(handle);
@@ -210,7 +217,23 @@ namespace ncore {
             return thread(id);
         }
 
-        __forceinline void close_handle() noexcept {
+        __forceinline id_t id() const noexcept {
+            return _id;
+        }
+
+        __forceinline auto handle() const noexcept {
+            return _handle.get();
+        }
+
+        __forceinline auto handle(ui32_t open_access = __defaultThreadOpenAccess) noexcept {
+            return _handle.get() ? _handle.get() : (_handle = handle::native_handle_t(get_handle(_id, open_access), __threadHandleCloser)).get();
+        }
+
+        __forceinline auto close_handle() noexcept {
+            return _handle.close();
+        }
+
+        __forceinline auto release() noexcept {
             return _handle.close();
         }
 
@@ -220,7 +243,7 @@ namespace ncore {
             auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION);
             if (!handle) _Exit: return result;
 
-            GetExitCodeThread(handle.get(), LPDWORD(&result));
+            result = get_info(handle.get()).ExitStatus;
 
             goto _Exit;
         }
@@ -239,7 +262,7 @@ namespace ncore {
             auto handle = temp_handle(_id, _handle, THREAD_QUERY_INFORMATION | SYNCHRONIZE);
             if (!handle) return false;
 
-            GetExitCodeThread(handle.get(), LPDWORD(_status));
+            *_status = get_info(handle.get()).ExitStatus;
 
             return *_status == STATUS_PENDING && WaitForSingleObject(handle.get(), null) != WAIT_OBJECT_0;
         }
@@ -259,7 +282,7 @@ namespace ncore {
 
         __forceinline auto set_priority(ui32_t priority) const noexcept {
             auto handle = temp_handle(_id, _handle, THREAD_ALL_ACCESS);
-            return bool(handle.get() ? SetThreadPriority(handle.get(), priority) : false);
+            return bool(handle.get() ? set_priority(handle.get(), priority) : false);
         }
 
         __forceinline auto set_context(const context_t& context) const noexcept {
@@ -337,23 +360,22 @@ namespace ncore {
             NtSetTimerResolution(time, true, nullptr);
         }
 
-        static __forceinline void sleep_micro(i32_t microsecounds) noexcept {
+        static __forceinline void sleep_micro(i32_t microsecounds, bool alertable = false) noexcept {
             if (microsecounds < null) return;
 
-            auto interval = LARGE_INTEGER();
-            interval.QuadPart = -10 * microsecounds;
-            NtDelayExecution(false, &interval);
+            auto delay = __lit_micro(microsecounds);
+            NtDelayExecution(alertable, &delay);
         }
 
-        static __forceinline void sleep_mili(i32_t milisecounds) noexcept {
-            return sleep_micro(milisecounds * 1000);
+        static __forceinline void sleep_mili(i32_t milisecounds, bool alertable = false) noexcept {
+            return sleep_micro(milisecounds * 1000, alertable);
         }
 
-        static __forceinline void sleep(i32_t time) noexcept {
+        static __forceinline void sleep(i32_t time, bool alertable = false) noexcept {
 #ifdef NCORE_THREAD_SLEEP_MICRO
-            return sleep_micro(time);
+            return sleep_micro(time, alertable);
 #else
-            return sleep_mili(time);
+            return sleep_mili(time, alertable);
 #endif
         }
     };

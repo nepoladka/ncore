@@ -11,6 +11,11 @@
 #define u16tou8(SRC, SRCLEN, DST, DSTLEN) WideCharToMultiByte(CP_UTF8, WC_COMPOSITECHECK, (wchar_t*)(SRC), int(SRCLEN), (char*)(DST), int(DSTLEN), NULL, NULL)
 #define u8tou16(SRC, SRCLEN, DST, DSTLEN) MultiByteToWideChar(CP_UTF8, NULL, (char*)(SRC), int(SRCLEN), (wchar_t*)(DST), int(DSTLEN))
 
+//c++ 20 -> u8"sample u8 text" has a (const char8_t*) type, this operator makes it (const char*) - u8"sample u8 text"d (d means default)
+static __forceinline constexpr const char* const operator "" d(const char8_t* c, unsigned __int64) noexcept {
+    return (const char*)c;
+}
+
 namespace ncore {
     namespace strings {
         using string_t = std::string;
@@ -30,14 +35,14 @@ namespace ncore {
         public:
             static __forceinline string_t make_u8(const wstring_t& u16) noexcept {
                 auto length = u16.length();
-                auto buffer = new char[length + 1] { null };
+                auto buffer = new char[length + 2] { null };
 
-                u16tou8(u16.c_str(), length, buffer, length);
+                u16tou8(u16.c_str(), length, buffer, length + 2);
 
-                auto result = string_t(buffer, length);
+                auto result = string_t(buffer, length + 2);
                 delete[] buffer;
 
-                return result;
+                return result.c_str();
             }
 
             static __forceinline wstring_t make_u16(const string_t& u8) noexcept {
@@ -49,7 +54,7 @@ namespace ncore {
                 auto result = wstring_t(buffer, length);
                 delete[] buffer;
 
-                return result;
+                return result.c_str();
             }
 
         public:
@@ -89,8 +94,8 @@ namespace ncore {
             }
         };
 
-        static __forceinline void replace_strings(string_t* data, const string_t& target, const string_t& value) {
-            if (!data || target.empty() || value.empty()) return;
+        static __forceinline auto replace_strings(string_t* data, const string_t& target, const string_t& value) noexcept {
+            if (!data || target.empty()) return data;
 
             do {
                 auto pos = data->find(target);
@@ -98,6 +103,8 @@ namespace ncore {
 
                 data->replace(pos, target.length(), value);
             } while (true);
+
+            return data;
         }
 
         static __forceinline string_t replace_strings(const string_t& data, const string_t& target, const string_t& value) noexcept {
@@ -106,7 +113,7 @@ namespace ncore {
             return buffer;
         }
 
-        static __forceinline string_t get_random_string(ssize_t length_min, ssize_t length_max = 0, const char* char_list = __defaultRandomCharList, size_t char_list_size = sizeof(__defaultRandomCharList)) {
+        static __forceinline string_t get_random_string(ssize_t length_min, ssize_t length_max = 0, const char* char_list = __defaultRandomCharList, size_t char_list_size = sizeof(__defaultRandomCharList)) noexcept {
             srand(unsigned(::time(0)) * GetCurrentThreadId());
 
             auto result = string_t();
@@ -118,9 +125,21 @@ namespace ncore {
             return result;
         }
 
-        static __forceinline std::vector<string_t> split_string(const string_t& data, char separator) {
+        static __forceinline std::vector<string_t> split_string(const string_t& string, size_t length) {
+            auto results = std::vector<string_t>();
+
+            auto position = size_t(0);
+            while (position < string.length()) {
+                results.push_back(string.substr(position, length));
+                position += length;
+            }
+
+            return results;
+        }
+
+        static __forceinline std::vector<string_t> split_string(const string_t& string, char separator) noexcept {
             std::vector<string_t> result;
-            std::stringstream stream(data.c_str());
+            std::stringstream stream(string.c_str());
             string_t item;
 
             while (std::getline(stream, item, separator)) {
@@ -128,6 +147,21 @@ namespace ncore {
             }
 
             return result;
+        }
+
+        static __forceinline std::vector<string_t> split_string(const string_t& string, const string_t& separator) noexcept {
+            std::vector<string_t> results;
+            size_t start = 0;
+            size_t end = 0;
+
+            while ((end = string.find(separator, start)) != string_t::npos) {
+                results.push_back(string.substr(start, end - start));
+                start = end + separator.length();
+            }
+
+            results.push_back(string.substr(start));
+
+            return results;
         }
 
         static __forceinline constexpr string_t string_to_lower(const string_t& data) noexcept {

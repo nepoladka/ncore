@@ -665,18 +665,29 @@ namespace ncore {
                 float(dev_mode.dmPelsHeight) / float(monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top) };
         }
 
-        static __forceinline vec2i32 get_scaled_window_size(HWND window, bool client_part) {
+        static __forceinline vec2i32 get_window_size(HWND window, bool client_part) {
             if (!window) return vec2i32();
 
             auto rectangle = RECT();
             auto get_rectangle = client_part ? GetClientRect : GetWindowRect;
             get_rectangle(window, &rectangle);
 
-            auto scale = get_screen_scale();
-
             return vec2i32(
-                (float(rectangle.right - rectangle.left) * scale.x),
-                (float(rectangle.bottom - rectangle.top) * scale.y));
+                (rectangle.right - rectangle.left),
+                (rectangle.bottom - rectangle.top));
+        }
+
+        static __forceinline vec2i32 get_scaled_window_size(HWND window, bool client_part) {
+            if (!window) return vec2i32();
+
+            auto scale = get_screen_scale();
+            auto size = get_window_size(window, client_part);
+
+            return vec2i32(int(float(size.x) * scale.x), int(float(size.y) * scale.y));
+        }
+
+        static __forceinline vec2i32 get_screen_size() {
+            return get_window_size(GetDesktopWindow(), null);
         }
 
         static __forceinline vec2i32 get_scaled_screen_size() {
@@ -830,6 +841,26 @@ namespace ncore {
 
             return count;
         }
+        
+        template<typename _t, bool _erase = true> static __forceinline auto realloc_reset(_t*& pointer, const _t& value) noexcept {
+            auto next = new _t(value);
+
+            auto previous = pointer;
+            pointer = next;
+
+            if constexpr (_erase) {
+                memset(previous, null, sizeof(_t));
+            }
+
+            delete previous;
+
+            return pointer;
+        }
+
+        //template<typename _t> static __forceinline auto duplicate(const _t* source, size_t count) noexcept {
+        //    const auto length = sizeof(_t) * count;
+        //    return (_t*)memcpy(malloc(length), source, length);
+        //}
 
         static __forceinline void* duplicate(const void* source, size_t length) noexcept {
             return memcpy(malloc(length), source, length);

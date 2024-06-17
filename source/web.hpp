@@ -165,9 +165,150 @@ namespace ncore::web {
 			r_socket_failed,
 		};
 
+		enum family : __int32 {
+			f_unspec = 0,           // unspecified
+			f_unix = 1,           // local to host (pipes, portals)
+			f_inet = 2,           // internetwork: UDP, TCP, etc.
+			f_implink = 3,             // arpanet imp addresses
+			f_pup = 4,          // pup protocols: e.g. BSP
+			f_chaos = 5,          // mit CHAOS protocols
+			f_ns = 6,        // XEROX NS protocols
+			f_ipx = f_ns,        // IPX protocols: IPX, SPX, etc.
+			f_iso = 7,       // ISO protocols
+			f_osi = f_iso,       // OSI is ISO
+			f_ecma = 8,          // european computer manufacturers
+			f_datakit = 9,            // datakit protocols
+			f_ccitt = 10,          // CCITT protocols, X.25 etc
+			f_sna = 11,           // IBM SNA
+			f_decnet = 12,         // DECnet
+			f_dli = 13,        // Direct data link interface
+			f_lat = 14,         // LAT
+			f_hylink = 15,            // NSC Hyperchannel
+			f_appletalk = 16,           // AppleTalk
+			f_netbios = 17,         // NetBios-style addresses
+			f_voiceview = 18,           // VoiceView
+			f_firefox = 19,         // Protocols from Firefox
+			f_unknown1 = 20,         // Somebody is using this!
+			f_ban = 21,           // Banyan
+			f_atm = 22,             // Native ATM Services
+			f_inet6 = 23,            // Internetwork Version 6
+			f_cluster = 24,           // Microsoft Wolfpack
+			f_12844 = 25,            // IEEE 1284.4 WG AF
+			f_irda = 26,             // IrDA
+			f_netdes = 28,              // Network Designers OSI & gateway
+
+#if(_WIN32_WINNT < 0x0501)
+			f_max = 29,
+#else //(_WIN32_WINNT < 0x0501)
+
+			f_tcnprocess = 29,
+			f_tcnmessage = 30,
+			f_iclfxbm = 31,
+
+#if(_WIN32_WINNT < 0x0600)
+			f_max = 32,
+#else //(_WIN32_WINNT < 0x0600)
+			f_bth = 32,              // Bluetooth RFCOMM/L2CAP protocols
+#if(_WIN32_WINNT < 0x0601)
+			f_max = 33,
+#else //(_WIN32_WINNT < 0x0601)
+			f_link = 33,
+#if(_WIN32_WINNT < 0x0604)
+			f_MAX = 34,
+#else //(_WIN32_WINNT < 0x0604)
+			f_hyperv = 34,
+			f_max = 35,
+#endif //(_WIN32_WINNT < 0x0604)
+#endif //(_WIN32_WINNT < 0x0601)
+#endif //(_WIN32_WINNT < 0x0600)
+
+#endif //(_WIN32_WINNT < 0x0501)
+		};
+
+		enum type : __int32 {
+			t_stream = 1,               /* stream socket */
+			t_dgram = 2,               /* datagram socket */
+			t_raw = 3,               /* raw-protocol interface */
+			t_rdm = 4,               /* reliably-delivered message */
+			t_seqpacket = 5,               /* sequenced packet stream */
+		};
+
+		enum protocol : __int32 {
+#if(_WIN32_WINNT >= 0x0501)
+			p_hopopts = 0,  // IPv6 Hop-by-Hop options
+#endif//(_WIN32_WINNT >= 0x0501)
+			p_icmp = 1,
+			p_igmp = 2,
+			p_ggp = 3,
+#if(_WIN32_WINNT >= 0x0501)
+			p_ipv4 = 4,
+#endif//(_WIN32_WINNT >= 0x0501)
+#if(_WIN32_WINNT >= 0x0600)
+			p_st = 5,
+#endif//(_WIN32_WINNT >= 0x0600)
+			p_tcp = 6,
+#if(_WIN32_WINNT >= 0x0600)
+			p_cbt = 7,
+			p_egp = 8,
+			p_igp = 9,
+#endif//(_WIN32_WINNT >= 0x0600)
+			p_pup = 12,
+			p_udp = 17,
+			p_idp = 22,
+#if(_WIN32_WINNT >= 0x0600)
+			p_rdp = 27,
+#endif//(_WIN32_WINNT >= 0x0600)
+
+#if(_WIN32_WINNT >= 0x0501)
+			p_ipv6 = 41, // IPv6 header
+			p_routing = 43, // IPv6 Routing header
+			p_fragment = 44, // IPv6 fragmentation header
+			p_esp = 50, // encapsulating security payload
+			p_ah = 51, // authentication header
+			p_icmpv6 = 58, // ICMPv6
+			p_none = 59, // IPv6 no next header
+			p_dstopts = 60, // IPv6 Destination options
+#endif//(_WIN32_WINNT >= 0x0501)
+
+			p_nd = 77,
+#if(_WIN32_WINNT >= 0x0501)
+			p_iclfxbm = 78,
+#endif//(_WIN32_WINNT >= 0x0501)
+#if(_WIN32_WINNT >= 0x0600)
+			p_pim = 103,
+			p_pgm = 113,
+			p_l2tp = 115,
+			p_sctp = 132,
+#endif//(_WIN32_WINNT >= 0x0600)
+			p_raw = 255,
+
+			p_max = 256,
+			//
+			//  These are reserved for internal use by Windows.
+			//
+			p_reserved_raw = 257,
+			p_reserved_ipsec = 258,
+			p_reserved_ipsecoffload = 259,
+			p_reserved_wnv = 260,
+			p_reserved_max = 261,
+		};
+
 		struct result_t {
-			result index = r_success;
-			__int32 status = 0;
+			result index;
+			__int32 status;
+
+			__forceinline constexpr result_t(result index = { }, __int32 status = { }) noexcept {
+				this->index = index;
+				this->status = status;
+			}
+
+			__forceinline constexpr bool const is_success() const noexcept {
+				return index == result::r_success;
+			}
+
+			__forceinline constexpr bool const is_error() const noexcept {
+				return index != result::r_success;
+			}
 		};
 
 		class client {
@@ -178,18 +319,18 @@ namespace ncore::web {
 			handle_t _handle;
 
 		public:
-			__forceinline client(const std::string& ip, const std::string& port) {
+			__forceinline constexpr client(const std::string& ip, const std::string& port) noexcept {
 				_ip = ip;
 				_port = port;
-				_handle = 0;
+				_handle = { };
 			}
 
-			result_t connect();
-			bool disconnect();
-			bool send(const void* data, size_t length);
-			bool receive(void* _buffer, size_t size, size_t* _length);
+			result_t connect(family family = family::f_unspec, type type = t_stream, protocol protocol = protocol::p_tcp);
+			result_t disconnect();
+			result_t send(const void* data, size_t length);
+			result_t receive(void* _buffer, size_t size, size_t* _length);
 
-			bool set_timeout(bool for_receive, unsigned timeout);
+			result_t set_timeout(bool for_receive, unsigned timeout);
 		};
 	}
 }

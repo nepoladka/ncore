@@ -221,7 +221,7 @@ namespace ncore {
                     auto name_offset = process.read_memory<ui32_t>(names_table + i);
                     auto export_name = process.read_memory<static_array<char, 0xff>>(address_t(image_base + name_offset));
 
-                    if (export_name.data() != export_name) continue;
+                    //if (export_name.data() != export_name) continue; //17.06.24 - WHAT THA HELL?????????? todo: debug it
 
                     auto ordinal = process.read_memory<ui16_t>(ordinals_table + i);
                     auto offset = process.read_memory<ui32_t>(addresses_table + ordinal);
@@ -828,10 +828,16 @@ namespace ncore {
             return process(id, open_access);
         }
 
-        static __forceinline process get_by_name(const std::string& name, ui32_t open_access = __defaultProcessOpenAccess) noexcept {
+        //executable name without exe [application.exe -> application]
+        static __forceinline process get_by_name(const std::string& name, ui32_t open_access = __defaultProcessOpenAccess, get_procedure_t(bool, comparsion_procedure, const std::string& current, const std::string& target) = nullptr) noexcept {
             auto processes = get_processes(open_access);
             for (auto& process : processes) {
-                if (process.get_name() == name) return ncore::process(process.id(), open_access);
+                auto current = process.get_name();
+
+                if (comparsion_procedure) {
+                    if (comparsion_procedure(current, name)) _End: return ncore::process(process.id(), open_access);
+                }
+                else if (current == name) goto _End;
             }
             return process();
         }
@@ -869,11 +875,19 @@ namespace ncore {
             return _id;
         }
 
-        __forceinline auto handle(ui32_t open_access = __defaultProcessOpenAccess) const noexcept {
-            return _handle.get() ? _handle.get() : ((*(handle::native_handle_t*)&_handle) = handle::native_handle_t(get_handle(_id, open_access))).get();
+        __forceinline auto handle() const noexcept {
+            return _handle.get();
+        }
+
+        __forceinline auto handle(ui32_t open_access = __defaultProcessOpenAccess) noexcept {
+            return _handle.get() ? _handle.get() : (_handle = handle::native_handle_t(get_handle(_id, open_access), __processHandleCloser)).get();
         }
 
         __forceinline auto close_handle() noexcept {
+            return _handle.close();
+        }
+
+        __forceinline auto release() noexcept {
             return _handle.close();
         }
 
@@ -916,7 +930,7 @@ namespace ncore {
         }
 
         __forceinline auto terminate(long exit_status = EXIT_SUCCESS) const noexcept {
-            auto handle = temp_handle(_id, _handle, PROCESS_TERMINATE);
+            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
             return handle.get() ? NT_SUCCESS(NtTerminateProcess(handle.get(), exit_status)) : false;
         }
 
@@ -928,6 +942,25 @@ namespace ncore {
         __forceinline auto get_priority() const noexcept {
             auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
             return ui32_t(handle.get() ? GetPriorityClass(handle.get()) : null);
+        }
+        
+        __forceinline auto set_privilege(const std::string& name, bool state) noexcept {
+            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
+            if (!handle) return false;
+
+            auto token = handle::native_t();
+            auto luid = LUID();
+
+            if (!OpenProcessToken(handle.get(), TOKEN_ADJUST_PRIVILEGES, &token)) return false;
+
+            if (!LookupPrivilegeValueA(nullptr, name.c_str(), &luid)) return false;
+
+            auto privileges = TOKEN_PRIVILEGES();
+            privileges.PrivilegeCount = 1;
+            privileges.Privileges[0].Luid = luid;
+            privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED * state;
+
+            return bool(AdjustTokenPrivileges(token, false, &privileges, sizeof(TOKEN_PRIVILEGES), nullptr, nullptr));
         }
 
         template<size_t _bufferSize = MAX_PATH + FILENAME_MAX> __forceinline auto get_path() const noexcept {
@@ -1192,6 +1225,29 @@ namespace ncore {
                 false;
         }
 
+        __forceinline ui32_t get_memory_protect(address_t address) const noexcept {
+            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
+            if (!handle) return null;
+
+            auto region_info = MEMORY_BASIC_INFORMATION();
+
+            return NT_SUCCESS(NtQueryVirtualMemory(handle.get(), address, MEMORY_INFORMATION_CLASS::MemoryBasicInformation, &region_info, sizeof(region_info), nullptr)) ?
+                ui32_t(region_info.Protect) :
+                null;
+        }
+
+        __forceinline bool set_memory_protect(address_t address, size_t size, ui32_t protect, ui32_t* _previous = nullptr) noexcept {
+            auto handle = temp_handle(_id, _handle, PROCESS_ALL_ACCESS);
+            if (!handle) return false;
+
+            if (!_previous) {
+                auto value = ui32_t();
+                _previous = &value;
+            }
+
+            return NT_SUCCESS(NtProtectVirtualMemory(handle.get(), &address, &size, protect, PULONG(_previous)));
+        }
+
         __forceinline address_t allocate_memory(size_t size = PAGE_SIZE, ui32_t protection = PAGE_EXECUTE_READWRITE, address_t address = nullptr) noexcept {
             auto result = address_t(nullptr);
 
@@ -1214,7 +1270,7 @@ namespace ncore {
             if (!handle) goto _Exit;
 
             result =
-                NT_SUCCESS(NtFreeVirtualMemory(handle.get(), &address, &size, MEM_DECOMMIT)) &&
+                //NT_SUCCESS(NtFreeVirtualMemory(handle.get(), &address, &size, MEM_DECOMMIT)) &&
                 NT_SUCCESS(NtFreeVirtualMemory(handle.get(), &address, &size, MEM_RELEASE));
 
             goto _Exit;

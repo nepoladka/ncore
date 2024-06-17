@@ -11,8 +11,10 @@
 #include "dimension_vector.hpp"
 #include "disassembly.hpp"
 #include "environment.hpp"
+#include "json.hpp"
 #include "file.hpp"
 #include "handle.hpp"
+#include "hidden.hpp"
 #include "input.hpp"
 #include "process.hpp"
 #include "readable_byte.hpp"
@@ -31,10 +33,6 @@
 
 #ifdef NCORE_INCLUDE_KERNELMAP
 #include "kernel_map.hpp"
-#endif
-
-#ifdef NCORE_INCLUDE_GWINDOW
-#include "gwindow.hpp"
 #endif
 
 #endif

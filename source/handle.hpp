@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef _NCORE_HANDLE
+#define _NCORE_HANDLE
+#endif
+
 namespace ncore {
 	namespace types {
 		using id_t = unsigned long;
