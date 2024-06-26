@@ -6,48 +6,102 @@
 
 namespace ncore {
 	namespace utils {
-		template<typename _t> static __forceinline constexpr auto shift(_t* array, const size_t capacity, size_t size, index_t where, size_t count, bool erase = false, _t** _out = nullptr, count_t* _out_count = nullptr) noexcept {
-			auto available = capacity - size;
-			auto length = __max(capacity, size);
+		template<typename _t> static __forceinline constexpr void copy(_t* dst, const _t* src, count_t count) noexcept {
+			for (index_t i = 0; i < count; ++i) {
+				dst[i] = src[i];
+			}
+		}
+
+		template<typename _t> static __forceinline constexpr void move(_t* dst, const _t* src, count_t count) noexcept {
+			if (dst < src) {
+				for (index_t i = 0; i < count; ++i) {
+					dst[i] = src[i];
+				}
+			}
+			else {
+				for (index_t i = count; i > 0; --i) {
+					dst[i - 1] = src[i - 1];
+				}
+			}
+		}
+
+		template<typename _t> static __forceinline constexpr void fill(_t* start, _t* end, const _t& value) noexcept {
+			for (auto ptr = start; ptr != end; ++ptr) {
+				*ptr = value;
+			}
+		}
+
+		template<bool _right, typename _t> static __forceinline constexpr void shift(_t* array, count_t capacity, count_t size, index_t index, count_t count, bool erase, _t** _out = nullptr, count_t* _out_count = nullptr) noexcept {
+			if (index >= capacity) {
+				index = capacity - 1;
+			}
+			else if (index < 0) {
+				index = 0;
+			}
+
+
+
 
 			/*
-				capacity = 5
-				size = 5
-				where = 2
-				count = 1
 			
-				1 2 3 4 5
-				1 2 _ 3 4 5
+			
+			
+			1 2 3 4 5
+		  1 2 3 _ 4 5      //left  | index = 2 | count = 1 |
+			1 2 _ 3 4 5    //right | index = 2 | count = 1 |
+			
+			
+			
+			
 			*/
 
-			if (available < count) {
-				auto number = count - available;
-				if (_out_count) {
-					*_out_count = number;
+
+
+
+			auto overflow = index_t();
+			if constexpr (_right) {
+				overflow = __min(null, size - index);
+			}
+			else {
+				overflow = __min(null, count - capacity - size);
+				//overflow = __min(count, index);
+			}
+
+			if (_out_count) {
+				*_out_count = overflow;
+			}
+
+			if (_out) {
+				*_out = new _t[overflow];
+
+				if constexpr (_right) {
+					utils::copy(*_out, array + size - overflow, overflow);
+				}
+				else {
+					utils::copy(*_out, array + index - overflow, overflow);
+				}
+			}
+
+			if constexpr (_right) {
+				if (index + count > size) {
+					count = size - index;
 				}
 
-				if (_out) {
-					auto buffer = *_out = new _t[number];
-
-					for (auto i = length - count, j = index_t(); i < length; i++, j++) {
-						buffer[j] = array[i];
-					}
+				utils::move(array + index + count, array + index, size - index - count);
+				if (erase) {
+					utils::fill(array + index, array + index + count, _t());
 				}
 			}
+			else {
+				if (index < count) {
+					count = index;
+				}
 
-			/*for (auto i = size - 1, j = i - count; i > where; i--, j--) {
-				array[i] = array[j];
-			}*/
-
-			for (auto destination = array + length - 1, source = destination - count, end = array + where; destination != end; source--, destination--) {
-				*destination = *source;
+				utils::move(array + index - count, array + index, count);
+				if (erase) {
+					utils::fill(array + index, array + index + count, _t());
+				}
 			}
-
-			if (erase) for (auto destination = array + where, end = destination + count; destination != end; destination++) {
-				memset(destination, null, sizeof(*array));
-			}
-
-			return array;
 		}
 	}
 
@@ -300,8 +354,8 @@ namespace ncore {
 			enum : index_t { npos = -1 };
 
 		private:
-			count_t _size;
-			_t _values[_capacity];
+			count_t _size = { };
+			_t _values[_capacity] = { };
 
 		public:
 			__forceinline constexpr static_collection() = default;
@@ -420,13 +474,18 @@ namespace ncore {
 				return assign(data, data + count);
 			}
 
-			__forceinline constexpr void insert(index_t position, const _t* data, size_t count, _t** _out = nullptr, size_t* _out_count = nullptr) {
+			__forceinline constexpr void insert(index_t position, const _t* data, size_t count, _t** _out = nullptr, size_t* _out_count = nullptr, bool shift_right = true) {
 				if (!_out_count) {
 					auto buffer = size_t();
 					_out_count = &buffer;
 				}
 
-				utils::shift(_values, _capacity, _size, position, count, false, _out, _out_count);
+				if (shift_right) {
+					utils::shift<true>(_values, _capacity, _size, position, count, false, _out, _out_count);
+				}
+				else {
+					utils::shift<false>(_values, _capacity, _size, position, count, false, _out, _out_count);
+				}
 
 				auto size = _size - *_out_count;
 
@@ -438,20 +497,20 @@ namespace ncore {
 				_size = size;
 			}
 
-			__forceinline constexpr void insert(index_t position, const _t* first, const _t* last, _t** _out = nullptr, size_t* _out_count = nullptr) noexcept {
-				return insert(position, first, last - first, _out, _out_count);
+			__forceinline constexpr void insert(index_t position, const _t* first, const _t* last, _t** _out = nullptr, size_t* _out_count = nullptr, bool shift_right = true) noexcept {
+				return insert(position, first, last - first, _out, _out_count, shift_right);
 			}
 
-			__forceinline constexpr void insert(const _t* position, const _t* first, const _t* last, _t** _out = nullptr, size_t* _out_count = nullptr) noexcept {
-				return insert(position - _values, first, last - first, _out, _out_count);
+			__forceinline constexpr void insert(const _t* position, const _t* first, const _t* last, _t** _out = nullptr, size_t* _out_count = nullptr, bool shift_right = true) noexcept {
+				return insert(position - _values, first, last - first, _out, _out_count, shift_right);
 			}
 
 			__forceinline constexpr auto push_back(const _t& value, _t** _out = nullptr, size_t* _out_count = nullptr) noexcept {
-				return insert(_size, &value, 1, _out, _out_count);
+				return insert(_size, &value, 1, _out, _out_count, false);
 			}
 
 			__forceinline constexpr auto push_front(const _t& value, _t** _out = nullptr, size_t* _out_count = nullptr) noexcept {
-				return insert(index_t(), &value, 1, _out, _out_count);
+				return insert(index_t(), &value, 1, _out, _out_count, true);
 			}
 
 			__forceinline constexpr auto& append(const _t& element, _t** _out = nullptr, size_t* _out_count = nullptr) noexcept {

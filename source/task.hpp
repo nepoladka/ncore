@@ -24,7 +24,7 @@ namespace ncore {
 				task._result = new result_t();
 			}
 
-			task._thread = thread::invoke(task._result, std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
+			task._thread = thread::invoke(task._result, procedure, std::forward<parameters_t>(parameters)...);
 
 			return task;
 		}

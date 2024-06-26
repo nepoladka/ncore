@@ -1,4 +1,5 @@
 #pragma once
+#include "action.hpp"
 #include "handle.hpp"
 #include "defines.hpp"
 #include "environment.hpp"
@@ -126,38 +127,6 @@ namespace ncore {
             return handle;
         }
 
-    private:
-        template<class result_t, class tuple_t> struct invoke_info {
-            result_t* result;
-            tuple_t* tuple;
-
-            __forceinline constexpr invoke_info(result_t* result, tuple_t* tuple) noexcept {
-                invoke_info::result = result;
-                invoke_info::tuple = tuple;
-            }
-        };
-
-        template <class result_t, class tuple_t, index_t... _indexes> static __declspec(noinline) void invoker(invoke_info<result_t, tuple_t>* data) noexcept {
-            const std::unique_ptr<tuple_t> values(data->tuple);
-            tuple_t& tuple = *values.get();
-
-            if constexpr (std::is_same<result_t, void>::value) {
-                std::invoke(std::move(std::get<_indexes>(tuple))...);
-            }
-            else {
-                auto result = std::invoke(std::move(std::get<_indexes>(tuple))...);
-                if (data->result) {
-                    *data->result = result;
-                }
-            }
-
-            return delete data;
-        }
-
-        template <class result_t, class tuple_t, index_t... _indexes> static __forceinline constexpr auto invoker_for(std::index_sequence<_indexes...>) noexcept {
-            return &invoker<result_t, tuple_t, _indexes...>;
-        }
-
     public:
         __forceinline thread(id_t id = null, ui32_t open_access = null) noexcept {
             if ((_id = id) && open_access) {
@@ -195,21 +164,10 @@ namespace ncore {
         }
 
         template <class procedure_t, class... parameters_t> static __forceinline thread invoke(std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>* _result, procedure_t&& procedure, parameters_t&&... parameters) noexcept {
-            using result_t = std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>;
-            using tuple_t = std::tuple<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>;
+            auto invoker = ncore::invoker::make<true>(_result, procedure, std::forward<parameters_t>(parameters)...);
 
-            auto decay = std::make_unique<tuple_t>(std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
-            constexpr auto invoker = invoker_for<result_t, tuple_t>(std::make_index_sequence<1 + sizeof...(parameters_t)>{});
-
-            auto data = new invoke_info<result_t, tuple_t>(_result, decay.get());
-
-            auto handle = create_ex(nullptr, invoker, data, null, null);
-            if (!handle) {
-                delete data;
-                return thread();
-            }
-
-            decay.release();
+            auto handle = create_ex(nullptr, invoker.procedure(), invoker.parameters(), null, null);
+            if (!handle) return invoker.release(), thread();
 
             auto id = get_id(handle);
             __threadHandleCloser(handle);

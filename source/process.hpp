@@ -459,9 +459,9 @@ namespace ncore {
             template<typename data_t = void> using thread_enumeration_procedure_t = get_procedure_t(enumeration::return_t, , const index_t, const thread_info_t&, data_t*);
 
         private:
-            handle::native_t _file;
-            handle::native_t _mapping;
-            address_t _data;
+            handle::native_t _file = { };
+            handle::native_t _mapping = { };
+            address_t _data = { };
 
         public:
             __forceinline minidump() = default;

@@ -2,6 +2,10 @@
 
 namespace ncore {
 	namespace types {
+		template <typename _t, const _t _value> struct stored_const {
+			static constexpr const _t const value = _value;
+		};
+
 		template<typename summary_t, typename half_t> union part_value {
 			struct {
 				half_t primary, secondary;

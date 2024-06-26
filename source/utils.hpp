@@ -4,6 +4,7 @@
 #include "dimension_vector.hpp"
 #include "task.hpp"
 #include "file.hpp"
+
 #include <tlhelp32.h>
 
 #define rand_in_range(MIN, MAX) (MIN + ((long long(GetTickCount64() ^ __thread_id)) % (MAX - MIN)))
@@ -881,7 +882,7 @@ namespace ncore {
             free(buffer);
         }
 
-        __forceinline auto read_console_line(const std::string& reason = std::string()) noexcept {
+        static __forceinline auto read_console_line(const std::string& reason = std::string()) noexcept {
             if (!reason.empty())
                 printf(reason.c_str());
 

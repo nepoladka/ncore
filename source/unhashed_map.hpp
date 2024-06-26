@@ -12,12 +12,28 @@ namespace ncore {
 			return this->contains({ key }, [](const entry_t& l, const entry_t& r) { return int(l.key() == r.key()); });
 		}
 
-		__forceinline constexpr auto& find(const key_t& key, value_t no_key_value = { }) const noexcept {
+		__forceinline constexpr auto& find(const key_t& key, entry_t& no_key_value = { }) noexcept {
 			for (auto& entry : *this) {
 				if (entry.key() == key) return entry;
 			}
 
 			return no_key_value;
+		}
+
+		__forceinline constexpr const auto& find(const key_t& key, const entry_t& no_key_value = { }) const noexcept {
+			for (auto& entry : *this) {
+				if (entry.key() == key) return entry;
+			}
+
+			return no_key_value;
+		}
+
+		__forceinline constexpr const auto& operator[](index_t index) const noexcept {
+			return collection<entry_t>::operator[](index);
+		}
+
+		__forceinline constexpr const auto& operator[](const key_t& key) const noexcept {
+			return find(key);
 		}
 	};
 }

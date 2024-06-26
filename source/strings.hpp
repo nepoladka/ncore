@@ -1,5 +1,6 @@
 #pragma once
 #include "defines.hpp"
+
 #include <windows.h>
 #include <string>
 #include <vector>
@@ -10,11 +11,6 @@
 #define to_lower_ascii(LETTER) ((LETTER >= 'A' && LETTER <= 'Z') ? (LETTER + 32) : LETTER)
 #define u16tou8(SRC, SRCLEN, DST, DSTLEN) WideCharToMultiByte(CP_UTF8, WC_COMPOSITECHECK, (wchar_t*)(SRC), int(SRCLEN), (char*)(DST), int(DSTLEN), NULL, NULL)
 #define u8tou16(SRC, SRCLEN, DST, DSTLEN) MultiByteToWideChar(CP_UTF8, NULL, (char*)(SRC), int(SRCLEN), (wchar_t*)(DST), int(DSTLEN))
-
-//c++ 20 -> u8"sample u8 text" has a (const char8_t*) type, this operator makes it (const char*) - u8"sample u8 text"d (d means default)
-static __forceinline constexpr const char* const operator "" d(const char8_t* c, unsigned __int64) noexcept {
-    return (const char*)c;
-}
 
 namespace ncore {
     namespace strings {
@@ -163,6 +159,18 @@ namespace ncore {
 
             return results;
         }
+        
+        //static __forceinline string_t get_inner_of_string(const string_t& text, const string_t& begin, const string_t& end) noexcept {
+        //    size_t beginPos = text.find(begin);
+        //    if (beginPos == std::string::npos) _Fail: return { };
+
+        //    beginPos += begin.length();
+
+        //    size_t endPos = text.find(end, beginPos);
+        //    if (endPos == std::string::npos) goto _Fail;
+
+        //    return text.substr(beginPos, endPos - beginPos);
+        //}
 
         static __forceinline constexpr string_t string_to_lower(const string_t& data) noexcept {
             auto result = string_t(data);
@@ -236,7 +244,30 @@ namespace ncore {
 
             return true;
         }
+
+        template<ui32_t _first = 2166136261u, ui32_t _second = 16777619u>
+        static __forceinline constexpr ui32_t hash_string(char const* s, size_t l) noexcept {
+            return ((l ? hash_string(s, l - 1) : _first) ^ s[l]) * _second;
+        }
+
+        template<ui32_t _first = 2166136261u, ui32_t _second = 16777619u>
+        static __forceinline constexpr ui32_t hash_string(const string_t& target) noexcept {
+            return hash_string<_first, _second>(target.c_str(), target.length());
+        }
     }
 
     using namespace strings;
 }
+
+//c++ 20 -> u8"sample u8 text" has a (const char8_t*) type, this operator makes it (const char*) - u8"sample u8 text"d (d means default)
+static __forceinline constexpr const char* const operator"" d(const char8_t* c, unsigned __int64 l) noexcept {
+    return (const char*)c;
+}
+
+//const hashing
+static __forceinline constexpr unsigned __int32 operator"" h(char const* s, unsigned __int64 l) noexcept {
+    return ncore::strings::hash_string(s, l);
+}
+
+#define __cstrh(VALUE) ncore::types::stored_const<unsigned __int32, VALUE ""h>::value //const string hash
+#define __iscstrheq(HASH, VALUE) __cstrh(HASH) == VALUE //is const string hash eqauls

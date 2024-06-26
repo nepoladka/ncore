@@ -4,11 +4,11 @@
 #include <string>
 
 #ifndef NCORE_TAGGED_POOL_TAKE
-#define NCORE_TAGGED_POOL_TAKE(SIZE) malloc(SIZE)
+#define NCORE_TAGGED_POOL_TAKE(SIZE) ::malloc(SIZE)
 #endif
 
 #ifndef NCORE_TAGGED_POOL_RELEASE
-#define NCORE_TAGGED_POOL_RELEASE(TARGET) free(TARGET), true
+#define NCORE_TAGGED_POOL_RELEASE(TARGET, SIZE) ::free(TARGET), true
 #endif
 
 namespace ncore {
@@ -20,22 +20,14 @@ namespace ncore {
 		};
 
 	private:
-		unhashed_map<tag_t, address_t> _allocations;
+		unhashed_map<tag_t, allocation_info> _allocations;
 
 	public:
 		__forceinline constexpr tagged_pool() = default;
-
-		__forceinline constexpr ~tagged_pool() {
-			for (auto& entry : _allocations) {
-				release(entry.value());
-			}
-		}
-
-		__forceinline constexpr tagged_pool(const tagged_pool&) = delete;
-		__forceinline constexpr tagged_pool& operator=(const tagged_pool&) = delete;
+		__forceinline constexpr ~tagged_pool() = default;
 
 		__forceinline constexpr allocation_info set(tag_t tag, address_t address, size_t size) noexcept {
-			auto previous = allocation_info();
+			auto previous = pair<tag_t, allocation_info>();
 
 			auto& target = _allocations.find(tag, previous);
 			if (target.key() == previous.key()) {
@@ -46,12 +38,12 @@ namespace ncore {
 
 				target.value() = { address, size };
 			}
-			
-			return previous;
+
+			return previous.value();
 		}
 
 		__forceinline constexpr address_t get(tag_t tag) const noexcept {
-			return _allocations.find(tag).value();
+			return _allocations.find(tag).value().address;
 		}
 
 		__forceinline constexpr address_t take(tag_t tag, size_t size) noexcept {
@@ -66,17 +58,27 @@ namespace ncore {
 			return address;
 		}
 
-		__forceinline constexpr bool release(tag_t tag) noexcept {
+		__forceinline constexpr void release(bool free = true) noexcept {
 			for (auto i = index_t(), l = _allocations.count(); i < l; i++) {
-				auto entry = _allocations[i];
+				auto& entry = _allocations[i];
+
+				if (free) if (!(NCORE_TAGGED_POOL_RELEASE(entry.value().address, entry.value().size))) continue;
+
+				_allocations.erase(_allocations.begin() + i);
+			}
+		}
+
+		__forceinline constexpr void release(tag_t tag, bool free = true) noexcept {
+			for (auto i = index_t(), l = _allocations.count(); i < l; i++) {
+				auto& entry = _allocations[i];
 				if (!(entry.key() == tag)) continue;
 
-				if (NCORE_TAGGED_POOL_RELEASE(entry.value())) return _allocations.erase(_allocations.begin() + i), true;
+				if (free) if (!(NCORE_TAGGED_POOL_RELEASE(entry.value().address, entry.value().size))) break;
+
+				_allocations.erase(_allocations.begin() + i);
 
 				break;
 			}
-
-			return false;
 		}
 	};
 }

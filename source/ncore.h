@@ -3,6 +3,7 @@
 #ifndef _NCORE_H
 #define _NCORE_H
 
+#include "action.hpp"
 #include "base64.hpp"
 #include "config.hpp"
 #include "enumeration.hpp"

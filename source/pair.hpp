@@ -7,7 +7,7 @@ namespace ncore {
 		value_t _value;
 
 	public:
-		__forceinline pair(const key_t& key, const value_t& value) noexcept {
+		__forceinline pair(const key_t& key = { }, const value_t& value = { }) noexcept {
 			_key = key;
 			_value = value;
 		}
