@@ -269,5 +269,5 @@ static __forceinline constexpr unsigned __int32 operator"" h(char const* s, unsi
     return ncore::strings::hash_string(s, l);
 }
 
-#define __cstrh(VALUE) ncore::types::stored_const<unsigned __int32, "" VALUE ""h>::value //const string hash
+#define __cstrh(VALUE) ncore::types::stored_const<unsigned __int32, ("" VALUE ""h)>::value //const string hash
 #define __iscstrheq(HASH, VALUE) __cstrh(HASH) == VALUE //is const string hash eqauls
