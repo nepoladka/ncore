@@ -668,26 +668,26 @@ namespace ncore {
             }
 
             __forceinline auto get_command_line() const noexcept {
-                constexpr const auto __badResult = compatible_string();
+                constexpr const auto bad_result = []() { return compatible_string(); };
 
                 auto directory = PMINIDUMP_DIRECTORY(nullptr);
                 auto list = PMINIDUMP_THREAD_LIST(nullptr);
 
-                if (!MiniDumpReadDumpStream(_data, MINIDUMP_STREAM_TYPE::ThreadListStream, &directory, address_p(&list), nullptr)) return __badResult;
+                if (!MiniDumpReadDumpStream(_data, MINIDUMP_STREAM_TYPE::ThreadListStream, &directory, address_p(&list), nullptr)) return bad_result();
 
                 auto teb = TEB();
-                if (!read_memory(list->Threads->Teb, sizeof(teb), &teb)) return __badResult;
+                if (!read_memory(list->Threads->Teb, sizeof(teb), &teb)) return bad_result();
                 
                 auto peb = PEB();
-                if (!read_memory(ui64_t(teb.ProcessEnvironmentBlock), sizeof(peb), &peb)) return __badResult;
+                if (!read_memory(ui64_t(teb.ProcessEnvironmentBlock), sizeof(peb), &peb)) return bad_result();
 
                 auto parameters = RTL_USER_PROCESS_PARAMETERS();
-                if (!read_memory(ui64_t(peb.ProcessParameters), sizeof(parameters), &parameters)) return __badResult;
+                if (!read_memory(ui64_t(peb.ProcessParameters), sizeof(parameters), &parameters)) return bad_result();
 
                 auto length = parameters.CommandLine.Length;
                 auto buffer = new wchar_t[parameters.CommandLine.MaximumLength] { 0 };
 
-                if (!read_memory(ui64_t(parameters.CommandLine.Buffer), length, buffer)) return __badResult;
+                if (!read_memory(ui64_t(parameters.CommandLine.Buffer), length, buffer)) return bad_result();
 
                 auto result = compatible_string({ buffer, length });
 

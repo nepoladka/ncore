@@ -33,6 +33,7 @@
 #include "utils.hpp"
 #include "vector.hpp"
 #include "web.hpp"
+#include "winreg.hpp"
 #include "zip.hpp"
 
 #ifdef NCORE_INCLUDE_KERNELMAP

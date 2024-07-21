@@ -29,7 +29,7 @@ namespace ncore {
 		__forceinline constexpr allocation_info set(tag_t tag, address_t address, size_t size) noexcept {
 			auto previous = pair<tag_t, allocation_info>();
 
-			auto& target = _allocations.find(tag, previous);
+			auto& target = _allocations.find_or_place(tag);
 			if (target.key() == previous.key()) {
 				_allocations.push_back({ tag, {address, size} });
 			}
@@ -46,16 +46,16 @@ namespace ncore {
 			return _allocations.find(tag).value().address;
 		}
 
-		__forceinline constexpr address_t take(tag_t tag, size_t size) noexcept {
+		template<typename _t = void> __forceinline constexpr _t* take(tag_t tag, size_t size) noexcept {
 			auto target = _allocations.find(tag);
-			if (target.key() == tag) return target.value();
+			if (target.key() == tag) return (_t*)target.value().address;
 
 			auto address = address_t(NCORE_TAGGED_POOL_TAKE(size));
 			if (address) {
 				_allocations.push_back({ tag, {address, size} });
 			}
 
-			return address;
+			return (_t*)address;
 		}
 
 		__forceinline constexpr void release(bool free = true) noexcept {

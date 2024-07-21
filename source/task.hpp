@@ -11,7 +11,7 @@ namespace ncore {
 		result_t* _result;
 
 	public:
-		__forceinline task() = default;
+		__forceinline constexpr task() = default;
 
 		//do not forget call task::release to destroy the object and release memory
 		template <class procedure_t, class... parameters_t> static __forceinline task create(procedure_t&& procedure, parameters_t&&... parameters) noexcept {
@@ -29,10 +29,10 @@ namespace ncore {
 			return task;
 		}
 
-		static __forceinline task attach(const thread& thread) noexcept {
+		static __forceinline task attach(const thread& thread, result_t* buffer = nullptr) noexcept {
 			auto result = task();
 			result._thread = thread;
-			result._result = nullptr;
+			result._result = buffer;
 			return result;
 		}
 
@@ -76,10 +76,17 @@ namespace ncore {
 			return _result != nullptr;
 		}
 
-		__forceinline constexpr auto result() const noexcept {
-			_thread.wait();
-			if constexpr (std::is_same<result_t, void>::value) return;
-			else return _result ? *_result : result_t();
+		__forceinline constexpr auto result(bool wait = true) const noexcept {
+			if (wait) {
+				_thread.wait();
+			}
+
+			if constexpr (std::is_same<result_t, void>::value) {
+				return;
+			}
+			else {
+				return _result ? *_result : result_t();
+			}
 		}
 
 		__forceinline constexpr auto get() const noexcept {

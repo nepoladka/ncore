@@ -4,6 +4,7 @@
 #include "dimension_vector.hpp"
 #include "task.hpp"
 #include "file.hpp"
+#include "process.hpp"
 
 #include <tlhelp32.h>
 
@@ -363,18 +364,26 @@ namespace ncore {
             return pTargetBase;
         }
 
-        static __forceinline bool can_access(address_t address)
-        {
-            __try {
-                auto byte = *(byte_t*)address;
-            }
-            __except (EXCEPTION_EXECUTE_HANDLER) {
-                return false;
-            }
+        template<bool _tryAccess = true> static __forceinline bool can_access_range(const void* begin, const void* end) noexcept {
+            if constexpr (_tryAccess) {
+                __try {
+                    auto byte = *byte_p(begin) + *byte_p(end);
+                }
+                __except (true) {
+                    return false;
+                }
 
-            //or queryvirtualmemory and check
+                return true;
+            }
+            else {
+                auto process = process::current(null);
 
-            return true;
+                return process.is_memory_available(address_t(begin)) && process.is_memory_available(address_t(end));
+            }
+        }
+
+        template<bool _tryAccess = true> static __forceinline bool can_access(const void* address) noexcept {
+            return can_access_range<_tryAccess>(address, address);
         }
 
         static __forceinline byte_t* dump_process_memory(handle::native_t process, address_t address, size_t size, byte_t* buffer = nullptr, int threads_count = 1, int threads_priority = THREAD_PRIORITY_HIGHEST/*, reading_info* _info = nullptr*/) {
@@ -888,6 +897,25 @@ namespace ncore {
 
             auto result = std::string();
             std::getline(std::cin, result);
+
+            return result;
+        }
+
+        static __forceinline auto create_guid() noexcept {
+            auto result = std::string();
+            auto guid = GUID();
+
+            if (CoCreateGuid(&guid) == S_OK) {
+                auto buffer = std::array<char, 36>();
+
+                snprintf(buffer.data(), buffer.size(), "{%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x}",
+                    guid.Data1, 
+                    guid.Data2, guid.Data3, 
+                    guid.Data4[0], guid.Data4[1], 
+                    guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+
+                result = std::string(buffer.data());
+            }
 
             return result;
         }

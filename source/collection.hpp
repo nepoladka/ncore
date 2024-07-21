@@ -347,6 +347,10 @@ namespace ncore {
 
 				return false;
 			}
+
+			__forceinline constexpr operator bool() const noexcept {
+				return not base_t::empty();
+			}
 		};
 
 		template<typename _t, count_t _capacity> class static_collection {
