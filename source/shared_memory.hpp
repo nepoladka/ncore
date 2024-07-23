@@ -112,5 +112,9 @@ namespace ncore {
 				return false;
 			}
 		}
+
+		__forceinline handle_t handle() {
+			return _wrapper.handle;
+		}
 	};
 }
