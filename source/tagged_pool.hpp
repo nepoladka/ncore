@@ -29,7 +29,7 @@ namespace ncore {
 		__forceinline constexpr allocation_info set(tag_t tag, address_t address, size_t size) noexcept {
 			auto previous = pair<tag_t, allocation_info>();
 
-			auto& target = _allocations.find_or_place(tag);
+			auto& target = _allocations.get(tag);
 			if (target.key() == previous.key()) {
 				_allocations.push_back({ tag, {address, size} });
 			}
