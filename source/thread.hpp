@@ -164,7 +164,7 @@ namespace ncore {
         }
 
         template <class procedure_t, class... parameters_t> static __forceinline thread invoke(std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>* _result, procedure_t&& procedure, parameters_t&&... parameters) noexcept {
-            auto invoker = ncore::invoker::make<true>(_result, procedure, std::forward<parameters_t>(parameters)...);
+            auto invoker = ncore::invoker::make<true>(_result, std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
 
             auto handle = create_ex(nullptr, invoker.procedure(), invoker.parameters(), null, null);
             if (!handle) return invoker.release(), thread();

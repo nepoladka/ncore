@@ -111,4 +111,38 @@ const_value(double, __m_pi_180, M_PI / 180.0);
 
 #define __deprecated(WHY) [[deprecated(WHY)]]
 
+#define __FILE_UNIQUE__ (__FILE__[sizeof(__FILE__) - 1] + __FILE__[sizeof(__FILE__) - 2] * 10 + __FILE__[sizeof(__FILE__) - 3] * 100 + __FILE__[sizeof(__FILE__) - 4] * 1000 + __FILE__[sizeof(__FILE__) - 5] * 10000 + __FILE__[sizeof(__FILE__) - 6] * 100000)
+#define __TIME_UNIQUE__ (__TIME__[7] + __TIME__[6] * 10 + __TIME__[4] * 100 + __TIME__[3] * 1000 + __TIME__[1] * 10000 + __TIME__[0] * 100000)
+#define __DATE_UNIQUE__ (__DATE__[4] + __DATE__[5] * 10 + __DATE__[7] * 100 + __DATE__[8] * 1000 + __DATE__[9] * 10000 + __DATE__[10] * 100000)
+#define __BUILD_UNIQUE__ (__TIME_UNIQUE__ ^ __DATE_UNIQUE__)
+#define __LINE_UNIQUE__ (__FILE_UNIQUE__ ^ __LINE__)
+#define __UNIQUE__ (__FILE_UNIQUE__ ^ __BUILD_UNIQUE__)
+
+/*
+static void sample() noexcept {
+	if constexpr (__isuniq(__COUNTER__)) {
+		printf("build number is - 1\n");
+	}
+	else if constexpr (__isuniq(__COUNTER__)) {
+		printf("build number is - 2\n");
+	}
+	else if constexpr (__isuniq(__COUNTER__)) {
+		printf("build number is - 3\n");
+	}
+	else if constexpr (__isuniq(__COUNTER__)) {
+		printf("build number is - 4\n");
+	}
+	else if constexpr (__isuniq(__COUNTER__)) {
+		printf("build number is - 5\n");
+	}
+	else if constexpr (__isuniq(__COUNTER__)) {
+		printf("build number is - 6\n");
+	}
+	else {
+		printf("build number is - 0\n");
+	}
+}
+*/
+#define __isuniq(NUMBER) ((__TIME_UNIQUE__ % (NUMBER + (3 * (NUMBER < 3)))) == 0)
+
 #include "types.hpp"

@@ -125,10 +125,13 @@ namespace ncore {
         }
 
         template <bool _dispose, class procedure_t, class... parameters_t> static __forceinline constexpr auto make(std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>* _result, procedure_t&& procedure, parameters_t&&... parameters) noexcept {
-            auto address = make_procedure<_dispose>(procedure, std::forward<parameters_t>(parameters)...);
-            auto arguments = make_parameters<true>(_result, procedure, std::forward<parameters_t>(parameters)...);
-        
-            return invoker(procedure, address, arguments);
+            auto result = invoker(); {
+                result._source = address_t(&procedure);
+                result._procedure = make_procedure<_dispose>(procedure, std::forward<parameters_t>(parameters)...);
+                result._parameters = make_parameters<true>(_result, procedure, std::forward<parameters_t>(parameters)...);
+            }
+
+            return result;
         }
 
         template <bool _store, class result_t, class... parameters_t> __forceinline constexpr auto remake(result_t* _result, parameters_t&&... parameters) const noexcept {

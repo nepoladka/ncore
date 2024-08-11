@@ -96,7 +96,7 @@ namespace ncore {
 
 	template <class procedure_t, class... parameters_t> static __forceinline auto async(procedure_t&& procedure, parameters_t&&... parameters) noexcept {
 		using result_t = std::_Invoke_result_t<std::decay_t<procedure_t>, std::decay_t<parameters_t>...>;
-		return task<result_t>::create(procedure, std::forward<parameters_t>(parameters)...);
+		return task<result_t>::create(std::forward<procedure_t>(procedure), std::forward<parameters_t>(parameters)...);
 	}
 
 	template<class result_t> static __forceinline auto wait_multi(const std::vector<task<result_t>>& tasks, ui32_t delay = 500) noexcept {
