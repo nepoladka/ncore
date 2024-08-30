@@ -22,7 +22,7 @@ namespace ncore {
         using context_t = CONTEXT;
         using environment_t = TEB;
 
-        static __forceinline handle::native_t get_handle(id_t id, ui32_t access = __defaultThreadOpenAccess) {
+        static __forceinline constexpr handle::native_t get_handle(id_t id, ui32_t access = __defaultThreadOpenAccess) {
             auto result = handle::native_t();
             auto attributes = OBJECT_ATTRIBUTES();
             auto client_id = CLIENT_ID();
@@ -81,7 +81,7 @@ namespace ncore {
         id_t _id;
         handle_t _handle;
 
-        __forceinline thread(id_t id, handle_t handle) noexcept {
+        __forceinline constexpr thread(id_t id, handle_t handle) noexcept {
             _id = id;
             _handle = handle;
         }
@@ -128,7 +128,7 @@ namespace ncore {
         }
 
     public:
-        __forceinline thread(id_t id = null, ui32_t open_access = null) noexcept {
+        __forceinline constexpr thread(id_t id = null, ui32_t open_access = null) noexcept {
             if ((_id = id) && open_access) {
                 _handle = handle_t(get_handle(id, open_access), __threadHandleCloser, false);
             }

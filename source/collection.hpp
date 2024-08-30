@@ -58,20 +58,16 @@ namespace ncore {
 
 
 
-			auto overflow = index_t();
-			if constexpr (_right) {
-				overflow = __min(null, size - index);
-			}
-			else {
-				overflow = __min(null, count - capacity - size);
-				//overflow = __min(count, index);
+			auto overflow = ssize_t(count - (capacity - size));
+			if (overflow < 0) {
+				overflow = 0;
 			}
 
 			if (_out_count) {
 				*_out_count = overflow;
 			}
 
-			if (_out) {
+			if (overflow && _out) {
 				*_out = new _t[overflow];
 
 				if constexpr (_right) {
