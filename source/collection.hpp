@@ -107,6 +107,7 @@ namespace ncore {
 		template<typename _t> class collection : public std::vector<_t> {
 		public:
 			using base_t = std::vector<_t>;
+			using base_t::vector;
 
 			enum : index_t { npos = -1 };
 
@@ -114,7 +115,7 @@ namespace ncore {
 			using comparison_procedure_t = get_procedure_t(int, , const _t& left, const _t& right);
 			using native_comparison_procedure_t = _CoreCrtNonSecureSearchSortCompareFunction;
 
-			__forceinline constexpr collection() noexcept : base_t({ }) {
+			/*__forceinline constexpr collection() noexcept : base_t({ }) {
 				return;
 			}
 
@@ -136,7 +137,7 @@ namespace ncore {
 
 			__forceinline constexpr collection(count_t count, const _t& value = _t()) noexcept : base_t(count, value) {
 				return;
-			}
+			}*/
 
 			__forceinline constexpr auto& vector() noexcept {
 				return *(std::vector<_t>*)this;
@@ -285,7 +286,7 @@ namespace ncore {
 
 			__forceinline constexpr auto& push_back(const _t& element, count_t limit = -1) noexcept {
 				if (count() < limit) {
-					base_t::insert(base_t::end(), element); //crash here | insert -> emplace -> _Emplace_reallocate -> allocate -> new -> _malloc_base -> ntdll.dll ... | 0xC00000FD
+					base_t::insert(base_t::end(), element); //crash here | insert -> emplace -> _Emplace_reallocate -> allocate -> new -> _malloc_base -> ntdll.dll ... | 0xC00000FD or something else; it happens when vector stored in stack
 				}
 
 				return *this;
@@ -346,6 +347,10 @@ namespace ncore {
 
 			__forceinline constexpr operator bool() const noexcept {
 				return not base_t::empty();
+			}
+
+			__forceinline constexpr void set(const collection& second) noexcept {
+				memcpy(this, &second, sizeof(collection));
 			}
 		};
 
