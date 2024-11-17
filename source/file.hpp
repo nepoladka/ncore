@@ -9,6 +9,7 @@
 #include <shlobj.h>
 #include <vector>
 #include <filesystem>
+#include <functional>
 
 namespace ncore {
 	static const handle::native_handle_t::closer_t const __fileHandleCloser = handle::native_handle_t::closer_t(NtClose);
@@ -481,5 +482,32 @@ namespace ncore {
 			strcat(path, "\\");
 		}
 		return path;
+	}
+
+	static __forceinline bool is_directory(const std::string& path) noexcept {
+		return std::filesystem::is_directory(std::filesystem::path(path));
+	}
+
+	static __forceinline std::vector<std::string> get_directory_files(const std::string& directory, i64_t depth) noexcept {
+		std::vector<std::string> files;
+
+		std::function<void(const std::filesystem::path&, long long)> recursive_search = [&](const std::filesystem::path& dir, i64_t current_depth) {
+			if (depth != -1 && current_depth > depth) {
+				return;
+			}
+
+			for (const auto& entry : std::filesystem::directory_iterator(dir)) {
+				if (entry.is_directory()) {
+					recursive_search(entry.path(), current_depth + 1);
+				}
+				else if (entry.is_regular_file()) {
+					files.push_back(entry.path().string());
+				}
+			}
+		};
+
+		recursive_search(directory, 0);
+
+		return files;
 	}
 }

@@ -89,6 +89,7 @@ const_value(double, __m_pi_180, M_PI / 180.0);
 #define BEGIN_UNALIGNED begin_unaligned
 #define END_UNALIGNED end_unaligned
 
+#define typeinf(TYPE) &typeid(TYPE)
 #define typeof decltype
 
 #define bit_field(NAME) ncore::types::bit_t NAME : 1
