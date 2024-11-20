@@ -115,11 +115,11 @@ namespace ncore {
 			using comparison_procedure_t = get_procedure_t(int, , const _t& left, const _t& right);
 			using native_comparison_procedure_t = _CoreCrtNonSecureSearchSortCompareFunction;
 
-			/*__forceinline constexpr collection() noexcept : base_t({ }) {
+			__forceinline constexpr collection(const std::vector<_t>& vector) noexcept : base_t(vector) {
 				return;
 			}
 
-			__forceinline constexpr collection(const std::vector<_t>& vector) noexcept : base_t(vector) {
+			/*__forceinline constexpr collection() noexcept : base_t({ }) {
 				return;
 			}
 
