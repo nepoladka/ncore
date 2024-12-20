@@ -221,6 +221,32 @@ namespace ncore {
         }
     };
 
+    struct lifetime {
+        ncore::invoker close_event;
+
+        __forceinline lifetime(const ncore::invoker& on_close) noexcept {
+            close_event = on_close;
+        }
+
+        __forceinline ~lifetime() noexcept {
+            if (close_event) {
+                close_event.invoke();
+            }
+        }
+
+        /*void sample() {
+            static thread_local auto life_start_time = ncore::ui32_t(); {
+                life_start_time = timeGetTime();
+            }
+
+            static auto close_event = [](const ncore::ui32_t* t0) { printf("execution took %dms\n", timeGetTime() - *t0); };
+            static auto on_close_invoker = ncore::invoker::make<false>(nullptr, close_event, &life_start_time);
+            auto context_life_time_agent = lifetime(on_close_invoker);
+
+            ncore::thread::sleep(2000);
+        }*/
+    };
+
 	/*template<typename _t, __tuple_head(arguments_t)> __forceinline constexpr _t invoke_action(action<_t>&& action, __tuple(arguments_t&&, arguments)) noexcept {
 		return __tuple_invoke(action.invoke, arguments_t, arguments);
 	}
