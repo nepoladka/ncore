@@ -1,5 +1,7 @@
 #pragma once
 #include <string>
+#include <vector>
+#include <map>
 
 //#pragma comment(lib, "nweb.lib")
 
@@ -149,8 +151,10 @@ namespace ncore::web {
 
 		using url_t = std::string;
 		using query_t = std::initializer_list<parameter_t>;
+		using body_t = std::vector<unsigned __int8>;
+		using headers_t = std::initializer_list<std::pair<std::string, std::string>>;
 
-		response_t send(const method_t method, const url_t& url, const query_t& parameters = { });
+		response_t send(const method_t method, const url_t& url, const query_t& parameters = { }, const headers_t& headers = { }, const body_t & body = { });
 	}
 
 	namespace socket {
