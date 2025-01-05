@@ -301,9 +301,10 @@ namespace ncore::web {
 			result index;
 			__int32 status;
 
-			__forceinline constexpr result_t(result index = { }, __int32 status = { }) noexcept {
-				this->index = index;
-				this->status = status;
+			__forceinline constexpr result_t(result index = { }, __int32 status = { }) noexcept :
+				index(index),
+				status(status) {
+				return;
 			}
 
 			__forceinline constexpr bool const is_success() const noexcept {
@@ -323,10 +324,11 @@ namespace ncore::web {
 			handle_t _handle;
 
 		public:
-			__forceinline constexpr client(const std::string& ip, const std::string& port) noexcept {
-				_ip = ip;
-				_port = port;
-				_handle = { };
+			__forceinline constexpr client(const std::string& ip, const std::string& port) noexcept :
+				_ip(ip),
+				_port(port),
+				_handle(handle_t()) {
+				return;
 			}
 
 			result_t connect(family family = family::f_unspec, type type = t_stream, protocol protocol = protocol::p_tcp);

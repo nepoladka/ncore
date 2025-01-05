@@ -29,7 +29,7 @@
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{955882f7-8682-4da3-b22f-ff1572e67fcf}</ProjectGuid>
     <RootNamespace>web</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.22621.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
