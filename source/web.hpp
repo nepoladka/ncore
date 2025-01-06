@@ -1,7 +1,50 @@
 #pragma once
+#ifdef NCORE_WEB_STANDALONE
 #include <string>
 #include <vector>
 #include <map>
+
+namespace ncore {
+	static __forceinline bool constexpr is_little_endian(unsigned __int64 value) noexcept {
+		const auto bytes = (const unsigned __int8*)(&value);
+		return *bytes == (value & 0xFFui8);
+	}
+
+	static __forceinline bool constexpr is_big_endian(unsigned __int64 value) noexcept {
+		const auto bytes = (const unsigned __int8*)(&value);
+		return *bytes != (value & 0xFFui8);
+	}
+
+	static __forceinline unsigned __int64 constexpr swap_endian(unsigned __int64 value) noexcept {
+		return ((value & 0xFF00000000000000ui64) >> 56) |
+			((value & 0x00FF000000000000ui64) >> 40) |
+			((value & 0x0000FF0000000000ui64) >> 24) |
+			((value & 0x000000FF00000000ui64) >> 8) |
+			((value & 0x00000000FF000000ui64) << 8) |
+			((value & 0x0000000000FF0000ui64) << 24) |
+			((value & 0x000000000000FF00ui64) << 40) |
+			((value & 0x00000000000000FFui64) << 56);
+	}
+
+	static __forceinline unsigned __int32 constexpr swap_endian(unsigned __int32 value) noexcept {
+		return ((value & 0xFF000000ui32) >> 24) |
+			((value & 0x00FF0000ui32) >> 8) |
+			((value & 0x0000FF00ui32) << 8) |
+			((value & 0x000000FFui32) << 24);
+	}
+
+	static __forceinline unsigned __int16 constexpr swap_endian(unsigned __int16 value) noexcept {
+		return ((value & 0xFF00ui16) >> 8) |
+			((value & 0x00FFui16) << 8);
+	}
+
+	static __forceinline unsigned __int8 constexpr swap_endian(unsigned __int8 value) noexcept {
+		return value;
+	}
+}
+#else
+#include "defines.hpp"
+#endif
 
 //#pragma comment(lib, "nweb.lib")
 

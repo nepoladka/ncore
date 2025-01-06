@@ -247,6 +247,6 @@ namespace ncore {
 	using namespace types;
 }
 
-#ifdef NCORE_MAKE_TYPES_GLOBAL
+#ifdef NCORE_TYPES_GLOBAL
 using namespace ncore::types;
 #endif

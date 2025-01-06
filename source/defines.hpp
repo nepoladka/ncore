@@ -147,3 +147,42 @@ static void sample() noexcept {
 #define __isuniq(NUMBER) ((__TIME_UNIQUE__ % (NUMBER + (3 * (NUMBER < 3)))) == 0)
 
 #include "types.hpp"
+
+namespace ncore {
+	static __forceinline bool constexpr is_little_endian(ui64_t value) noexcept {
+		const auto bytes = (const ui8_t*)(&value);
+		return *bytes == (value & 0xFFui8);
+	}
+
+	static __forceinline bool constexpr is_big_endian(ui64_t value) noexcept {
+		const auto bytes = (const ui8_t*)(&value);
+		return *bytes != (value & 0xFFui8);
+	}
+
+	static __forceinline ui64_t constexpr swap_endian(ui64_t value) noexcept {
+		return ((value & 0xFF00000000000000ui64) >> 56) |
+			((value & 0x00FF000000000000ui64) >> 40) |
+			((value & 0x0000FF0000000000ui64) >> 24) |
+			((value & 0x000000FF00000000ui64) >> 8) |
+			((value & 0x00000000FF000000ui64) << 8) |
+			((value & 0x0000000000FF0000ui64) << 24) |
+			((value & 0x000000000000FF00ui64) << 40) |
+			((value & 0x00000000000000FFui64) << 56);
+	}
+
+	static __forceinline ui32_t constexpr swap_endian(ui32_t value) noexcept {
+		return ((value & 0xFF000000ui32) >> 24) |
+			((value & 0x00FF0000ui32) >> 8) |
+			((value & 0x0000FF00ui32) << 8) |
+			((value & 0x000000FFui32) << 24);
+	}
+
+	static __forceinline ui16_t constexpr swap_endian(ui16_t value) noexcept {
+		return ((value & 0xFF00ui16) >> 8) |
+			((value & 0x00FFui16) << 8);
+	}
+
+	static __forceinline ui8_t constexpr swap_endian(ui8_t value) noexcept {
+		return value;
+	}
+}
