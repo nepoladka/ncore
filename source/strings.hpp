@@ -23,6 +23,9 @@ namespace ncore {
                 "qwertyuiopasdfghjklzxcvbnm"
         };
 
+        static constexpr const auto const __xorTime = __TIME__;
+        static constexpr const auto const __xorSeed = static_cast<int>(__xorTime[7]) + static_cast<int>(__xorTime[6]) * 10 + static_cast<int>(__xorTime[4]) * 60 + static_cast<int>(__xorTime[3]) * 600 + static_cast<int>(__xorTime[1]) * 3600 + static_cast<int>(__xorTime[0]) * 36000;
+
         class compatible_string {
         private:
             string_t _u8;
@@ -88,6 +91,78 @@ namespace ncore {
             __forceinline constexpr auto& wstring() const noexcept {
                 return _u16;
             }
+        };
+
+        class xored_string {
+        private:
+            // 1988, Stephen Park and Keith Miller
+            // "Random Number Generators: Good Ones Are Hard To Find", considered as "minimal standard"
+            // Park-Miller 31 bit pseudo-random number generator, implemented with G. Carta's optimisation:
+            // with 32-bit math and without division
+
+            template < int N >
+            struct random_generator {
+            private:
+                static constexpr unsigned a = 16807; // 7^5
+                static constexpr unsigned m = 2147483647; // 2^31 - 1
+
+                static constexpr unsigned s = random_generator< N - 1 >::value;
+                static constexpr unsigned lo = a * (s & 0xFFFF); // Multiply lower 16 bits by 16807
+                static constexpr unsigned hi = a * (s >> 16); // Multiply higher 16 bits by 16807
+                static constexpr unsigned lo2 = lo + ((hi & 0x7FFF) << 16); // Combine lower 15 bits of hi with lo's upper bits
+                static constexpr unsigned hi2 = hi >> 15; // Discard lower 15 bits of hi
+                static constexpr unsigned lo3 = lo2 + hi;
+
+            public:
+                static constexpr unsigned max = m;
+                static constexpr unsigned value = lo3 > m ? lo3 - m : lo3;
+            };
+
+            template <>
+            struct random_generator< 0 > {
+                static constexpr unsigned value = __xorSeed;
+            };
+
+            template < int N, int M >
+            struct random_int {
+                static constexpr auto value = random_generator< N + 1 >::value % M;
+            };
+
+            template < int N >
+            struct random_char {
+                static const char value = static_cast<char>(1 + random_int< N, 0x7F - 1 >::value);
+            };
+
+        public:
+            template < size_t N, int K >
+            struct xor_string {
+            private:
+                const char _key;
+                std::array< char, N + 1 > _encrypted;
+
+                constexpr char enc(char c) const {
+                    return c ^ _key;
+                }
+
+                char dec(char c) const {
+                    return c ^ _key;
+                }
+
+            public:
+                template < size_t... Is >
+                constexpr __forceinline xor_string(const char* str, std::index_sequence< Is... >) :
+                    _key(random_char< K >::value), _encrypted{ enc(str[Is])... } {
+                    return;
+                }
+
+                __forceinline decltype(auto) decrypt(void) {
+                    for (size_t i = 0; i < N; ++i) {
+                        _encrypted[i] = dec(_encrypted[i]);
+                    }
+                    _encrypted[N] = '\0';
+                    return _encrypted.data();
+                }
+            };
         };
 
         static __forceinline auto replace_strings(string_t* data, const string_t& target, const string_t& value) noexcept {
@@ -163,12 +238,12 @@ namespace ncore {
         //static __forceinline string_t get_inner_of_string(const string_t& text, const string_t& begin, const string_t& end) noexcept {
         //    size_t beginPos = text.find(begin);
         //    if (beginPos == std::string::npos) _Fail: return { };
-
+        //
         //    beginPos += begin.length();
-
+        //
         //    size_t endPos = text.find(end, beginPos);
         //    if (endPos == std::string::npos) goto _Fail;
-
+        //
         //    return text.substr(beginPos, endPos - beginPos);
         //}
 
@@ -254,10 +329,54 @@ namespace ncore {
         static __forceinline constexpr ui32_t hash_string(const string_t& target) noexcept {
             return hash_string<_first, _second>(target.c_str(), target.length());
         }
+
+
+
     }
 
     using namespace strings;
 }
+
+
+
+//--------------------------------------------------------------------------------
+//-- Note: XorStr will __NOT__ work directly with functions like printf.
+//         To work with them you need a wrapper function that takes a const char*
+//         as parameter and passes it to printf and alike.
+//
+//         The Microsoft Compiler/Linker is not working correctly with variadic 
+//         templates!
+//  
+//         Use the functions below or use std::cout (and similar)!
+//--------------------------------------------------------------------------------
+
+static auto w_printf = [](const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vprintf_s(fmt, args);
+    va_end(args);
+    };
+
+static auto w_printf_s = [](const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vprintf_s(fmt, args);
+    va_end(args);
+    };
+
+static auto w_sprintf = [](char* buf, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vsprintf_s(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    };
+
+static auto w_sprintf_s = [](char* buf, size_t buf_size, const char* fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    vsprintf_s(buf, buf_size, fmt, args);
+    va_end(args);
+    };
 
 //c++ 20 -> u8"sample u8 text" has a (const char8_t*) type, this operator makes it (const char*) - u8"sample u8 text"d (d means default)
 static __forceinline constexpr const char* const operator"" d(const char8_t* c, unsigned __int64 l) noexcept {
@@ -271,3 +390,9 @@ static __forceinline constexpr unsigned __int32 operator"" h(char const* s, unsi
 
 #define __cstrh(VALUE) ncore::types::stored_const<unsigned __int32, ("" VALUE ""h)>::value //const string hash
 #define __iscstrheq(HASH, VALUE) __cstrh(HASH) == VALUE //is const string hash eqauls
+
+#ifdef NCORE_STRINGS_NO_XOR
+#define __cstrx(VALUE) (VALUE)
+#else
+#define __cstrx(VALUE) (ncore::strings::xored_string::xor_string<sizeof(VALUE) - 1, __COUNTER__>(VALUE, std::make_index_sequence< sizeof(VALUE) - 1>()).decrypt())
+#endif

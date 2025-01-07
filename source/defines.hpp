@@ -149,17 +149,17 @@ static void sample() noexcept {
 #include "types.hpp"
 
 namespace ncore {
-	static __forceinline bool constexpr is_little_endian(ui64_t value) noexcept {
+	static __forceinline constexpr bool is_little_endian(ui64_t value) noexcept {
 		const auto bytes = (const ui8_t*)(&value);
 		return *bytes == (value & 0xFFui8);
 	}
 
-	static __forceinline bool constexpr is_big_endian(ui64_t value) noexcept {
+	static __forceinline constexpr bool is_big_endian(ui64_t value) noexcept {
 		const auto bytes = (const ui8_t*)(&value);
 		return *bytes != (value & 0xFFui8);
 	}
 
-	static __forceinline ui64_t constexpr swap_endian(ui64_t value) noexcept {
+	static __forceinline constexpr ui64_t swap_endian(ui64_t value) noexcept {
 		return ((value & 0xFF00000000000000ui64) >> 56) |
 			((value & 0x00FF000000000000ui64) >> 40) |
 			((value & 0x0000FF0000000000ui64) >> 24) |
@@ -170,19 +170,19 @@ namespace ncore {
 			((value & 0x00000000000000FFui64) << 56);
 	}
 
-	static __forceinline ui32_t constexpr swap_endian(ui32_t value) noexcept {
+	static __forceinline constexpr ui32_t swap_endian(ui32_t value) noexcept {
 		return ((value & 0xFF000000ui32) >> 24) |
 			((value & 0x00FF0000ui32) >> 8) |
 			((value & 0x0000FF00ui32) << 8) |
 			((value & 0x000000FFui32) << 24);
 	}
 
-	static __forceinline ui16_t constexpr swap_endian(ui16_t value) noexcept {
+	static __forceinline constexpr ui16_t swap_endian(ui16_t value) noexcept {
 		return ((value & 0xFF00ui16) >> 8) |
 			((value & 0x00FFui16) << 8);
 	}
 
-	static __forceinline ui8_t constexpr swap_endian(ui8_t value) noexcept {
+	static __forceinline constexpr ui8_t swap_endian(ui8_t value) noexcept {
 		return value;
 	}
 }
