@@ -431,7 +431,7 @@ namespace ncore {
                         threads[i].thread.resume();
                 }
             };
-            
+
             struct reading_arguments {
                 reading_thread_info::specific_thread_info* info;
 
@@ -853,7 +853,7 @@ namespace ncore {
 
             return count;
         }
-        
+
         template<typename _t, bool _erase = true> static __forceinline auto realloc_reset(_t*& pointer, const _t& value) noexcept {
             auto next = new _t(value);
 
@@ -908,15 +908,15 @@ namespace ncore {
             auto guid = GUID();
 
             if (CoCreateGuid(&guid) == S_OK) {
-                auto buffer = std::array<char, 36>();
+                char buffer[36] = { 0 };
 
-                snprintf(buffer.data(), buffer.size(), "{%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x}",
-                    guid.Data1, 
-                    guid.Data2, guid.Data3, 
-                    guid.Data4[0], guid.Data4[1], 
+                snprintf(buffer, sizeof(buffer), "{%08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x}",
+                    guid.Data1,
+                    guid.Data2, guid.Data3,
+                    guid.Data4[0], guid.Data4[1],
                     guid.Data4[2], guid.Data4[3], guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
 
-                result = std::string(buffer.data());
+                result = std::string(buffer);
             }
 
             return result;
