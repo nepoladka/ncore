@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <string>
 #include <vector>
+#include <array>
 #include <sstream>
 #include <iostream>
 #include <algorithm>
