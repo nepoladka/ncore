@@ -6,6 +6,8 @@
 #include "file.hpp"
 #include "process.hpp"
 
+#include <map>
+#include <regex>
 #include <tlhelp32.h>
 
 #define rand_in_range(MIN, MAX) (MIN + ((long long(GetTickCount64() ^ __thread_id)) % (MAX - MIN)))
@@ -918,6 +920,23 @@ namespace ncore {
             }
 
             return result;
+        }
+
+        //gets only -- arguments
+        static __forceinline auto get_command_line_arguments_double_hyphen(const std::string& command_line) {
+            std::map<std::string, std::string> arguments;
+            std::regex pattern(R"(--(\w+)(?:\s+([^\s]+))?)");
+            std::smatch match;
+            std::string::const_iterator start(command_line.cbegin());
+
+            while (std::regex_search(start, command_line.cend(), match, pattern)) {
+                std::string key = match[1].str();
+                std::string value = match[2].matched ? match[2].str() : "";
+                arguments[key] = value;
+                start = match.suffix().first;
+            }
+
+            return arguments;
         }
     }
 
