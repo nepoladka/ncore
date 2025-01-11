@@ -1,5 +1,4 @@
 #pragma once
-#define NCORE_ENUMERATION_NO_BINARY
 #include "enumeration.hpp"
 
 #include <vector>

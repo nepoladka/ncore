@@ -1,7 +1,7 @@
 #pragma once
 #include "defines.hpp"
 
-#ifndef NCORE_ENUMERATION_NO_BINARY
+#ifdef NCORE_ENUMERATION_BINARY
 #include "environment.hpp"
 #endif
 
@@ -53,7 +53,7 @@ namespace ncore::enumeration {
 		return result;
 	}
 
-#ifndef NCORE_ENUMERATION_NO_BINARY
+#ifdef NCORE_ENUMERATION_BINARY
 	template<typename data_t = void*> ncore_procedure(constexpr bool) enumerate_binary(address_t address, size_t size, binary_procedure_t<data_t> procedure, data_t data) noexcept {
 		struct enumeration_info {
 			data_t* data;
@@ -67,6 +67,9 @@ namespace ncore::enumeration {
 
 				if (step) {
 					i += step;
+				}
+				else {
+					i += sizeof(byte_t);
 				}
 
 				return result;
