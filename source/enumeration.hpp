@@ -17,9 +17,9 @@ namespace ncore::enumeration {
 			step = 1;
 		}
 
-		if (count && procedure) for (size_t i = 0; i < count; i += step, elements += step) {
+		if (count && procedure) for (size_t i = 0; i < count; i += step) {
 			__try {
-				if (bool(procedure(i, *elements, data))) return true;
+				if (bool(procedure(i, *(elements + i), data))) return true;
 			}
 			__except (1) {
 				i += failure_step;
@@ -65,11 +65,11 @@ namespace ncore::enumeration {
 				auto step = size_t(0);
 				auto result = info->procedure(&byte, *info->data, step);
 
-				if (step) {
+				if (step > 0) {
 					i += step;
 				}
 				else {
-					i += sizeof(byte_t);
+					i = sizeof(byte_t);
 				}
 
 				return result;
@@ -86,7 +86,7 @@ namespace ncore::enumeration {
 
 		auto info = enumeration_info{ &data, procedure };
 
-		return enumerate<byte_t, enumeration_info*>((byte_t*)address, size, enumeration_procedure, &info);
+		return enumerate<byte_t, enumeration_info*>((byte_t*)address, size, enumeration_procedure, &info, size_t(0));
 	}
 #endif
 }

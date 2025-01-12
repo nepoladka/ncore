@@ -93,7 +93,7 @@ const_value(double, __m_pi_180, M_PI / 180.0);
 #define typeof decltype
 
 #define bit_field(NAME) ncore::types::bit_t NAME : 1
-#define __bit(NAME) bool NAME : 1
+#define __biti(VALUE, INDEX) ncore::types::bit_t(((VALUE) >> (INDEX)) & 1)
 
 #define __property(GETTER, SETTER) __declspec(property(get = ##GETTER, put = ##SETTER))
 #define __public public:

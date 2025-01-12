@@ -63,6 +63,30 @@ namespace ncore {
             __forceinline constexpr auto size() const noexcept {
                 return size_t(this->RegionSize);
             }
+
+            __forceinline constexpr auto readable() const noexcept {
+                return not bool(base().Protect & (
+                    PAGE_NOACCESS |
+                    PAGE_GUARD |
+                    PAGE_NOCACHE));
+            }
+
+            __forceinline constexpr auto writeable() const noexcept {
+                return bool(base().Protect & (
+                    PAGE_READWRITE |
+                    PAGE_WRITECOPY |
+                    PAGE_EXECUTE_READWRITE |
+                    PAGE_EXECUTE_WRITECOPY |
+                    PAGE_WRITECOMBINE));
+            }
+
+            __forceinline constexpr auto executable() const noexcept {
+                return bool(base().Protect & (
+                    PAGE_EXECUTE |
+                    PAGE_EXECUTE_READ |
+                    PAGE_EXECUTE_READWRITE | 
+                    PAGE_EXECUTE_WRITECOPY));
+            }
         };
 
         class region_t : private MEMORY_REGION_INFORMATION {
